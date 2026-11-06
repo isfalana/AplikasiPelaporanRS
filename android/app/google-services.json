@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "85098741909",
+    "project_id": "aplikasilaporanpermata",
+    "storage_bucket": "aplikasilaporanpermata.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:85098741909:android:605101d60f86859261db9c",
+        "android_client_info": {
+          "package_name": "com.example.aplikasilaporan"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD_Ol6nQ05NMMZ4THTlGNQbaYtUmJ_e3_c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
