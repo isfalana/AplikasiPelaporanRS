@@ -1,16 +1,27 @@
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../routes/app_pages.dart';
 
 class DashboardController extends GetxController {
-  var unitName = ''.obs;
+  final GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
+      
+  // State untuk mengontrol Sidebar Desktop
+  var isSidebarExpanded = false.obs;
+
+  void toggleSidebar() {
+    isSidebarExpanded.value = !isSidebarExpanded.value;
+  }
   
-  // Variabel metrik
+  void openDrawer() {
+    scaffoldKey.currentState?.openDrawer();
+  }
+
+  // ... (Variabel metrik dan list data Anda tetap sama) ...
+  var unitName = ''.obs;
   var jumlahLaporan = 0.obs;
   var jumlahPesanTindakan = 0.obs;
   var jumlahTindakanSelesai = 0.obs;
-  
-  // List data
   var listLaporan = <Map<String, dynamic>>[].obs;
   var isLoading = true.obs;
 
