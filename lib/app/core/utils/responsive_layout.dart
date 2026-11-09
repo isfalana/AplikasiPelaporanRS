@@ -6,10 +6,10 @@ class ResponsiveLayout extends StatelessWidget {
   final Widget desktop;
 
   const ResponsiveLayout({
-    Key? key,
+    super.key,
     required this.mobile,
     required this.desktop,
-  }) : super(key: key);
+  });
 
   // Tambahkan dua baris static helper ini untuk mendeteksi ukuran layar
   static bool isMobile(BuildContext context) => MediaQuery.of(context).size.width < 800;

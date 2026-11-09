@@ -61,7 +61,7 @@ class DashboardView extends GetView<DashboardController> {
               ListTile(
                 leading: const Icon(Icons.home, color: AppColors.white),
                 title: const Text('Dashboard', style: TextStyle(color: AppColors.white)),
-                tileColor: AppColors.primary.withOpacity(0.2), // Active indicator
+                tileColor: AppColors.primary.withValues(alpha: 0.2), // Active indicator
                 onTap: () {},
               ),
               ListTile(
