@@ -1,15 +1,18 @@
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../../routes/app_pages.dart';
 
 class DashboardController extends GetxController {
   var unitName = ''.obs;
-  
+  var isSidebarCollapsed = false.obs;
+  var isMasterExpanded = true.obs;
+
   // Variabel metrik
   var jumlahLaporan = 0.obs;
   var jumlahPesanTindakan = 0.obs;
   var jumlahTindakanSelesai = 0.obs;
-  
+
   // List data
   var listLaporan = <Map<String, dynamic>>[].obs;
   var isLoading = true.obs;
@@ -40,25 +43,34 @@ class DashboardController extends GetxController {
       listLaporan.assignAll([
         {
           "id": "LP-001",
-          "kegiatan": "Perbaikan IBS & Penambahan Mesin Cuci",
-          "deadline": "30 Okt 2026",
+          "tanggal": "8 Nov 2026",
+          "deadline": "12 Nov 2026",
+          "perihal": "Perbaikan IBS & Penambahan Mesin Cuci",
           "pic": "Umum",
-          "status": "Pending"
+          "prioritas": "High",
+          "lastUpdateBy": "Admin Unit",
+          "status": "Open",
         },
         {
           "id": "LP-002",
-          "kegiatan": "Follow up MOU dengan dr Enung Sp PD EMD",
-          "deadline": "15 Okt 2026",
+          "tanggal": "7 Nov 2026",
+          "deadline": "15 Nov 2026",
+          "perihal": "Follow up MOU dengan dr Enung Sp PD EMD",
           "pic": "SDM",
-          "status": "Done"
+          "prioritas": "Mid",
+          "lastUpdateBy": "Kepala SDM",
+          "status": "Done",
         },
         {
           "id": "LP-003",
-          "kegiatan": "Buat link untuk progres tindaklanjut IT",
-          "deadline": "23 Okt 2026",
+          "tanggal": "9 Nov 2026",
+          "deadline": "11 Nov 2026",
+          "perihal": "Buat link untuk progres tindaklanjut IT",
           "pic": "IT",
-          "status": "On Progress"
-        }
+          "prioritas": "Mid",
+          "lastUpdateBy": "Staff IT",
+          "status": "On Progress",
+        },
       ]);
     } finally {
       isLoading.value = false;

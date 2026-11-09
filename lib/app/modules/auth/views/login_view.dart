@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+
 import '../controllers/auth_controller.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/responsive_layout.dart';
@@ -10,24 +11,23 @@ class LoginView extends GetView<AuthController> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // Latar belakang utama (abu-abu sangat terang / surface)
-      backgroundColor: AppColors.surface, 
+      backgroundColor: AppColors.surface,
       body: ResponsiveLayout(
         mobile: _buildLoginForm(context, isMobile: true),
         desktop: Center(
           child: Container(
-            // Container Box tidak mepet layar (lebar max 420px)
-            width: 420,
-            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 48),
+            width: 440,
+            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 40),
             decoration: BoxDecoration(
               color: AppColors.white,
               borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.border),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 20,
-                  offset: const Offset(0, 4),
-                )
+                  color: AppColors.primary.withValues(alpha: 0.06),
+                  blurRadius: 28,
+                  offset: const Offset(0, 10),
+                ),
               ],
             ),
             child: _buildLoginForm(context, isMobile: false),
@@ -39,114 +39,209 @@ class LoginView extends GetView<AuthController> {
 
   Widget _buildLoginForm(BuildContext context, {required bool isMobile}) {
     return SafeArea(
-      child: SingleChildScrollView(
-        // Padding untuk versi mobile agar tidak mepet
-        padding: EdgeInsets.all(isMobile ? 24.0 : 0), 
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Judul Utama (Primary Color)
-            const Text(
-              'Selamat datang di\nAplikasi Lapor Permata',
-              textAlign: TextAlign.left,
-              style: TextStyle(
-                fontSize: 26,
-                fontWeight: FontWeight.w900,
-                color: AppColors.primary,
-                height: 1.3,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final verticalPadding = isMobile ? 48.0 : 0.0;
+          return SingleChildScrollView(
+            padding: EdgeInsets.symmetric(
+              horizontal: isMobile ? 24 : 0,
+              vertical: isMobile ? 24 : 0,
+            ),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: constraints.maxHeight - verticalPadding,
               ),
-            ),
-            const SizedBox(height: 12),
-            
-            // Subjudul
-            const Text(
-              'Masukan akun anda untuk masuk ke dalam aplikasi',
-              textAlign: TextAlign.left,
-              style: TextStyle(color: AppColors.textStrong, fontSize: 14),
-            ),
-            const SizedBox(height: 32),
-            
-            // Label dan Input Username
-            const Text('Username', style: TextStyle(color: AppColors.textStrong, fontSize: 14)),
-            const SizedBox(height: 8),
-            TextField(
-              controller: controller.usernameController,
-              decoration: InputDecoration(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppColors.border),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppColors.border),
-                ),
-                filled: true,
-                fillColor: AppColors.white,
-              ),
-            ),
-            const SizedBox(height: 20),
-            
-            // Label dan Input Kata Sandi
-            const Text('Kata Sandi', style: TextStyle(color: AppColors.textStrong, fontSize: 14)),
-            const SizedBox(height: 8),
-            Obx(() => TextField(
-              controller: controller.passwordController,
-              obscureText: controller.isPasswordHidden.value,
-              decoration: InputDecoration(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    controller.isPasswordHidden.value ? Icons.visibility_off : Icons.visibility,
-                    color: AppColors.textWeak,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    'Selamat datang di\nAplikasi Lapor Permata',
+                    textAlign: TextAlign.left,
+                    style: TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textStrong,
+                      height: 1.25,
+                      letterSpacing: -0.4,
+                    ),
                   ),
-                  onPressed: controller.togglePasswordView,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppColors.border),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppColors.border),
-                ),
-                filled: true,
-                fillColor: AppColors.white,
-              ),
-            )),
-            
-            // Teks Lupa Sandi
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () {},
-                child: const Text('Lupa kata sandi?', style: TextStyle(color: AppColors.textWeak)),
-              ),
-            ),
-            const SizedBox(height: 24),
-            
-            // Tombol Masuk
-            Center(
-              child: Obx(() => SizedBox(
-                width: 220,
-                child: ElevatedButton(
-                  onPressed: controller.isLoading.value ? null : controller.login,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    elevation: 0,
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Masukkan akun Anda untuk masuk ke dalam aplikasi.',
+                    textAlign: TextAlign.left,
+                    style: TextStyle(
+                      color: AppColors.textWeak,
+                      fontSize: 14,
+                      height: 1.5,
+                    ),
                   ),
-                  child: controller.isLoading.value
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: AppColors.white, strokeWidth: 2))
-                      : const Text('Masuk', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.white)),
-                ),
-              )),
+                  const SizedBox(height: 32),
+                  const Text(
+                    'Username',
+                    style: TextStyle(
+                      color: AppColors.textStrong,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: controller.usernameController,
+                    style: const TextStyle(
+                      color: AppColors.textStrong,
+                      fontSize: 15,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Masukkan username',
+                      hintStyle: const TextStyle(color: AppColors.textWeak),
+                      prefixIcon: const Icon(
+                        Icons.person_outline,
+                        color: AppColors.textWeak,
+                        size: 20,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 15,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(
+                          color: AppColors.primary,
+                          width: 1.5,
+                        ),
+                      ),
+                      filled: true,
+                      fillColor: AppColors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Kata Sandi',
+                    style: TextStyle(
+                      color: AppColors.textStrong,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Obx(
+                    () => TextField(
+                      controller: controller.passwordController,
+                      obscureText: controller.isPasswordHidden.value,
+                      style: const TextStyle(
+                        color: AppColors.textStrong,
+                        fontSize: 15,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Masukkan kata sandi',
+                        hintStyle: const TextStyle(color: AppColors.textWeak),
+                        prefixIcon: const Icon(
+                          Icons.lock_outline,
+                          color: AppColors.textWeak,
+                          size: 20,
+                        ),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            controller.isPasswordHidden.value
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
+                            color: AppColors.textWeak,
+                            size: 20,
+                          ),
+                          onPressed: controller.togglePasswordView,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 15,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: AppColors.border),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: AppColors.border),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(
+                            color: AppColors.primary,
+                            width: 1.5,
+                          ),
+                        ),
+                        filled: true,
+                        fillColor: AppColors.white,
+                      ),
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () {},
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                      child: const Text(
+                        'Lupa kata sandi?',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Obx(
+                    () => SizedBox(
+                      height: 50,
+                      child: ElevatedButton(
+                        onPressed: controller.isLoading.value
+                            ? null
+                            : controller.login,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: AppColors.white,
+                          disabledBackgroundColor: AppColors.primary.withValues(
+                            alpha: 0.65,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: controller.isLoading.value
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  color: AppColors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text(
+                                'Masuk',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
 }
+  
