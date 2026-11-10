@@ -24,7 +24,7 @@ class LoginView extends GetView<AuthController> {
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 20,
                   offset: const Offset(0, 4),
                 )
@@ -94,6 +94,7 @@ class LoginView extends GetView<AuthController> {
             Obx(() => TextField(
               controller: controller.passwordController,
               obscureText: controller.isPasswordHidden.value,
+              onSubmitted: (_) => controller.login(),
               decoration: InputDecoration(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 suffixIcon: IconButton(

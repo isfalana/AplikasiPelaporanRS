@@ -43,7 +43,7 @@ class KategoriView extends GetView<KategoriController> {
               boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
             ),
             child: DataTable(
-              headingRowColor: MaterialStateProperty.all(AppColors.surface),
+              headingRowColor: WidgetStateProperty.all(AppColors.surface),
               columns: const [
                 DataColumn(label: Text('ID Kategori', style: TextStyle(fontWeight: FontWeight.bold))),
                 DataColumn(label: Text('Jenis Kategori', style: TextStyle(fontWeight: FontWeight.bold))),
