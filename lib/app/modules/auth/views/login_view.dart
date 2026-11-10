@@ -235,6 +235,43 @@ class LoginView extends GetView<AuthController> {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 18),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Akun demo penindak',
+                          style: TextStyle(
+                            color: AppColors.textStrong,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        ...AuthController.demoAccounts.entries.map((entry) {
+                          return TextButton(
+                            onPressed: () =>
+                                controller.selectDemoAccount(entry.key),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              alignment: Alignment.centerLeft,
+                            ),
+                            child: Text(
+                              '${entry.value['name']} · ${entry.key} · '
+                              'Kata sandi: ${entry.value['password']}',
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),

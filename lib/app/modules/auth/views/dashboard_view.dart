@@ -18,19 +18,8 @@ class DashboardView extends GetView<DashboardController> {
         return Scaffold(
           backgroundColor: AppColors.surface,
           appBar: isMobile
-              ? AppBar(
-                  title: const Text(
-                    'Dashboard',
-                    style: TextStyle(
-                      color: AppColors.textStrong,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  backgroundColor: AppColors.white,
-                  surfaceTintColor: AppColors.white,
-                  elevation: 0,
-                  iconTheme: const IconThemeData(color: AppColors.textStrong),
+              ? SidebarWidget.mobileAppBar(
+                  title: 'Dashboard',
                   actions: [
                     IconButton(
                       tooltip: 'Keluar',
@@ -42,12 +31,8 @@ class DashboardView extends GetView<DashboardController> {
                 )
               : null,
           drawer: isMobile
-              ? Drawer(
-                  width: 280,
-                  backgroundColor: AppColors.sidebarDark,
-                  child: SafeArea(
-                    child: _buildSidebar(isCollapsed: false, isMobile: true),
-                  ),
+              ? SidebarWidget.mobileDrawer(
+                  child: _buildSidebar(isCollapsed: false, isMobile: true),
                 )
               : null,
           body: isMobile ? _buildMobileLayout() : _buildDesktopLayout(),
@@ -145,6 +130,7 @@ class DashboardView extends GetView<DashboardController> {
         isMobile: isMobile,
         currentRoute: Routes.DASHBOARD,
         unitName: controller.unitName.value,
+        employeeName: controller.employeeName.value,
         isMasterExpanded: controller.isMasterExpanded.value,
         onMasterMenuTap: () {
           if (isCollapsed) {

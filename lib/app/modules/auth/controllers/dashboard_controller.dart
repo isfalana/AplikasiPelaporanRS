@@ -1,10 +1,12 @@
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../laporan/controllers/laporan_controller.dart';
 import '../../../routes/app_pages.dart';
 
 class DashboardController extends GetxController {
   var unitName = ''.obs;
+  var employeeName = ''.obs;
   var isSidebarCollapsed = false.obs;
   var isMasterExpanded = true.obs;
 
@@ -27,6 +29,21 @@ class DashboardController extends GetxController {
   void loadUserData() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     unitName.value = prefs.getString('unit_name') ?? 'Unit';
+    employeeName.value = _readEmployeeName(prefs);
+  }
+
+  String _readEmployeeName(SharedPreferences prefs) {
+    for (final key in [
+      'nama_karyawan',
+      'nama_pegawai',
+      'nama_lengkap',
+      'employee_name',
+      'full_name',
+    ]) {
+      final name = prefs.getString(key)?.trim();
+      if (name != null && name.isNotEmpty) return name;
+    }
+    return prefs.getString('id_nik') ?? 'Pengguna';
   }
 
   void fetchDashboardData() async {
@@ -80,6 +97,9 @@ class DashboardController extends GetxController {
   void logout() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.clear(); // Hapus sesi login
+    if (Get.isRegistered<LaporanController>()) {
+      Get.delete<LaporanController>(force: true);
+    }
     Get.offAllNamed(Routes.LOGIN); // Kembali ke halaman login
   }
 }

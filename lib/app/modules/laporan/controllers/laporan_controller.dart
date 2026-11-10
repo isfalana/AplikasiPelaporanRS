@@ -17,8 +17,9 @@ class LaporanController extends GetxController {
       'id_tindak_lanjut': 'TL-01',
       'perihal': 'Kerusakan AC Ruang IGD',
       'prioritas': 'Tinggi',
-      'keterangan': 'AC tidak dingin dan mengeluarkan bunyi bising di ruangan IGD.',
-      'status': 'Pending',
+      'keterangan':
+          'AC tidak dingin dan mengeluarkan bunyi bising di ruangan IGD.',
+      'status': 'Open',
       'tgl_selesai': null,
     },
     {
@@ -33,7 +34,7 @@ class LaporanController extends GetxController {
       'perihal': 'Permintaan Perbaikan Jaringan LAN',
       'prioritas': 'Sedang',
       'keterangan': 'Koneksi internet di ruang administrasi sering terputus.',
-      'status': 'Proses',
+      'status': 'On Progress',
       'tgl_selesai': null,
     },
   ].obs;
@@ -49,7 +50,7 @@ class LaporanController extends GetxController {
     isLoading.value = true;
     try {
       await Future.delayed(const Duration(milliseconds: 800));
-      // Nanti di sini bisa diganti dengan pemanggilan Dio: 
+      // Nanti di sini bisa diganti dengan pemanggilan Dio:
       // Dio dio = await ApiService.getClient();
       // final response = await dio.get('/laporan');
       // listLaporan.assignAll(response.data);

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../controllers/dashboard_controller.dart';
+import '../../auth/controllers/dashboard_controller.dart';
 import '../controllers/laporan_controller.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../global_widgets/sidebar_widgets.dart';
@@ -25,26 +25,14 @@ class LaporanView extends GetView<LaporanController> {
         return Scaffold(
           backgroundColor: AppColors.surface,
           appBar: isMobile
-              ? AppBar(
-                  title: const Text(
-                    'Daftar Laporan RS',
-                    style: TextStyle(color: AppColors.white),
-                  ),
-                  backgroundColor: AppColors.primary,
-                  elevation: 0,
-                  iconTheme: const IconThemeData(color: AppColors.white),
-                )
+              ? SidebarWidget.mobileAppBar(title: 'Daftar Laporan RS')
               : null,
           drawer: isMobile
-              ? Drawer(
-                  width: 280,
-                  backgroundColor: AppColors.white,
-                  child: SafeArea(
-                    child: _buildSidebar(
-                      dashboardController,
-                      isCollapsed: false,
-                      isMobile: true,
-                    ),
+              ? SidebarWidget.mobileDrawer(
+                  child: _buildSidebar(
+                    dashboardController,
+                    isCollapsed: false,
+                    isMobile: true,
                   ),
                 )
               : null,
@@ -130,6 +118,7 @@ class LaporanView extends GetView<LaporanController> {
         isMobile: isMobile,
         currentRoute: Routes.LAPORAN,
         unitName: dashboardController.unitName.value,
+        employeeName: dashboardController.employeeName.value,
         isMasterExpanded: dashboardController.isMasterExpanded.value,
         onMasterMenuTap: () {
           if (isCollapsed) {
@@ -210,7 +199,7 @@ class _LaporanContentState extends State<_LaporanContent> {
       _tanggalKejadian = DateTime.now();
       _deadline = DateTime.now().add(const Duration(days: 1));
       _selectedKategori = null;
-      _selectedPrioritas = null;
+      _selectedPrioritas = _priorityForDeadline(_deadline);
       _selectedPics.clear();
       _perihalController.clear();
       _buktiController.clear();
@@ -233,7 +222,8 @@ class _LaporanContentState extends State<_LaporanContent> {
           _parseDate(report['deadline']?.toString()) ??
           DateTime.now().add(const Duration(days: 1));
       _selectedKategori = report['id_kategori']?.toString();
-      _selectedPrioritas = report['prioritas']?.toString();
+      _selectedPrioritas =
+          report['prioritas']?.toString() ?? _priorityForDeadline(_deadline);
       _selectedPics
         ..clear()
         ..addAll(
@@ -259,10 +249,23 @@ class _LaporanContentState extends State<_LaporanContent> {
     setState(() {
       if (isDeadline) {
         _deadline = selectedDate;
+        _selectedPrioritas = _priorityForDeadline(selectedDate);
       } else {
         _tanggalKejadian = selectedDate;
       }
     });
+  }
+
+  String _priorityForDeadline(DateTime deadline) {
+    final reportDate =
+        _parseDate(_editingReport?['tgl_laporan']?.toString()) ??
+        DateUtils.dateOnly(DateTime.now());
+    final remainingDays = DateUtils.dateOnly(deadline)
+        .difference(DateUtils.dateOnly(reportDate))
+        .inDays;
+    if (remainingDays <= 1) return 'Tinggi';
+    if (remainingDays <= 3) return 'Sedang';
+    return 'Rendah';
   }
 
   void _submitReport() {
@@ -310,7 +313,7 @@ class _LaporanContentState extends State<_LaporanContent> {
       'prioritas': _selectedPrioritas,
       'deadline': _formatDate(_deadline),
       'bukti': _buktiController.text.trim(),
-      'status': _editingReport?['status'] ?? 'Pending',
+      'status': _displayStatus(_editingReport?['status']?.toString()),
       'tgl_selesai': _editingReport?['tgl_selesai'],
     };
 
@@ -378,14 +381,14 @@ class _LaporanContentState extends State<_LaporanContent> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 900;
-        final formContentWidth = constraints.maxWidth - 80;
-        final formColumns = formContentWidth >= 800
-            ? 3
-            : formContentWidth >= 540
-            ? 2
-            : 1;
+        final contentWidth = constraints.maxWidth - 40;
+        final formWidth = isWide ? (contentWidth - 20) * 0.6 : contentWidth;
+        final formPadding = constraints.maxWidth < 600 ? 14.0 : 20.0;
+        final fieldSpacing = constraints.maxWidth < 600 ? 12.0 : 20.0;
+        final formContentWidth = formWidth - formPadding * 2 - 2;
+        const formColumns = 2;
         final fieldWidth =
-            (formContentWidth - (formColumns - 1) * 20) / formColumns;
+            (formContentWidth - (formColumns - 1) * fieldSpacing) / formColumns;
         return SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Column(
@@ -415,54 +418,34 @@ class _LaporanContentState extends State<_LaporanContent> {
                       ],
                     ),
                   ),
-                  if (MediaQuery.sizeOf(context).width < 900)
-                    IconButton(
-                      tooltip: 'Buat laporan',
-                      onPressed: _resetForm,
-                      icon: const Icon(Icons.add, color: AppColors.primary),
-                    ),
                 ],
               ),
               const SizedBox(height: 16),
-              _buildForm(fieldWidth),
-              const SizedBox(height: 24),
-              const Text(
-                'Daftar Laporan',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textStrong,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Obx(() {
-                if (controller.isLoading.value) {
-                  return const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(32),
-                      child: CircularProgressIndicator(),
+              if (isWide)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: formWidth,
+                      child: _buildForm(
+                        fieldWidth,
+                        fieldSpacing: fieldSpacing,
+                        padding: formPadding,
+                      ),
                     ),
-                  );
-                }
-                if (controller.listLaporan.isEmpty) {
-                  return _emptyState();
-                }
-
-                return Wrap(
-                  spacing: 16,
-                  runSpacing: 14,
-                  children: controller.listLaporan
-                      .map(
-                        (report) => SizedBox(
-                          width: isWide
-                              ? (constraints.maxWidth - 56) / 2
-                              : constraints.maxWidth - 40,
-                          child: _buildReportCard(report),
-                        ),
-                      )
-                      .toList(),
-                );
-              }),
+                    const SizedBox(width: 20),
+                    Expanded(child: _buildReportList()),
+                  ],
+                )
+              else ...[
+                _buildForm(
+                  fieldWidth,
+                  fieldSpacing: fieldSpacing,
+                  padding: formPadding,
+                ),
+                const SizedBox(height: 24),
+                _buildReportList(),
+              ],
             ],
           ),
         );
@@ -470,7 +453,55 @@ class _LaporanContentState extends State<_LaporanContent> {
     );
   }
 
-  Widget _buildForm(double fieldWidth) {
+  Widget _buildReportList() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Daftar Laporan',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textStrong,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Obx(() {
+          if (controller.isLoading.value) {
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.all(32),
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+          if (controller.listLaporan.isEmpty) {
+            return _emptyState();
+          }
+
+          return Column(
+            children: controller.listLaporan
+                .map(
+                  (report) => Padding(
+                    padding: const EdgeInsets.only(bottom: 14),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: _buildReportCard(report),
+                    ),
+                  ),
+                )
+                .toList(),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildForm(
+    double fieldWidth, {
+    required double fieldSpacing,
+    required double padding,
+  }) {
     final categories = _availableValues('id_kategori');
     final picOptions = _availableValues('id_nik_pic')
         .expand((value) => value.split(','))
@@ -487,13 +518,13 @@ class _LaporanContentState extends State<_LaporanContent> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(padding),
       decoration: _cardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Wrap(
-            spacing: 20,
+            spacing: fieldSpacing,
             runSpacing: 16,
             children: [
               SizedBox(
@@ -555,6 +586,31 @@ class _LaporanContentState extends State<_LaporanContent> {
                       setState(() => _selectedPrioritas = value),
                 ),
               ),
+              SizedBox(
+                width: fieldWidth,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _fieldLabel('Upload bukti'),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: _buktiController,
+                      decoration: _inputDecoration(
+                        hint: 'Pilih atau masukkan nama file bukti',
+                        suffixIcon: IconButton(
+                          tooltip: 'Lampirkan bukti',
+                          onPressed: () {
+                            setState(() {
+                              _buktiController.text = 'bukti_laporan.jpg';
+                            });
+                          },
+                          icon: const Icon(Icons.attach_file_rounded),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -563,24 +619,6 @@ class _LaporanContentState extends State<_LaporanContent> {
           TextField(
             controller: _perihalController,
             decoration: _inputDecoration(hint: 'Ringkasan perihal kendala...'),
-          ),
-          const SizedBox(height: 16),
-          _fieldLabel('Upload bukti'),
-          const SizedBox(height: 6),
-          TextField(
-            controller: _buktiController,
-            decoration: _inputDecoration(
-              hint: 'Pilih atau masukkan nama file bukti',
-              suffixIcon: IconButton(
-                tooltip: 'Lampirkan bukti',
-                onPressed: () {
-                  setState(() {
-                    _buktiController.text = 'bukti_laporan.jpg';
-                  });
-                },
-                icon: const Icon(Icons.attach_file_rounded),
-              ),
-            ),
           ),
           const SizedBox(height: 20),
           Row(
@@ -623,7 +661,10 @@ class _LaporanContentState extends State<_LaporanContent> {
             hint: picOptions.isEmpty ? 'Belum ada pilihan PIC' : 'Tambah PIC',
           ),
           items: picOptions
-              .map((pic) => DropdownMenuItem(value: pic, child: Text(pic)))
+              .map(
+                (pic) =>
+                    DropdownMenuItem(value: pic, child: Text(_picLabel(pic))),
+              )
               .toList(),
           onChanged: picOptions.isEmpty
               ? null
@@ -641,7 +682,10 @@ class _LaporanContentState extends State<_LaporanContent> {
             children: _selectedPics
                 .map(
                   (pic) => Chip(
-                    label: Text(pic, style: const TextStyle(fontSize: 11)),
+                    label: Text(
+                      _picLabel(pic),
+                      style: const TextStyle(fontSize: 11),
+                    ),
                     onDeleted: () => setState(() => _selectedPics.remove(pic)),
                     backgroundColor: AppColors.primary.withValues(alpha: 0.12),
                     deleteIconColor: AppColors.primary,
@@ -655,7 +699,7 @@ class _LaporanContentState extends State<_LaporanContent> {
   }
 
   Widget _buildReportCard(Map<String, dynamic> report) {
-    final status = report['status']?.toString() ?? 'Pending';
+    final status = _displayStatus(report['status']?.toString());
     final priorityColor = switch (report['prioritas']?.toString()) {
       'Tinggi' => AppColors.error,
       'Sedang' => AppColors.warning,
@@ -665,10 +709,7 @@ class _LaporanContentState extends State<_LaporanContent> {
         report['tgl_laporan']?.toString() ??
         report['tanggal_laporan']?.toString() ??
         '-';
-    final pic =
-        report['id_nik_pic']?.toString() ??
-        report['id_unit_pic']?.toString() ??
-        '-';
+    final pic = _picDisplay(report);
     final lastUpdatedBy =
         report['last_update_by']?.toString() ??
         report['lastUpdateBy']?.toString() ??
@@ -696,6 +737,16 @@ class _LaporanContentState extends State<_LaporanContent> {
                       color: AppColors.primary,
                     ),
                   ),
+                ),
+                IconButton(
+                  tooltip: 'Edit laporan',
+                  onPressed: () => _loadForEdit(report),
+                  icon: const Icon(
+                    Icons.edit_outlined,
+                    size: 17,
+                    color: AppColors.primary,
+                  ),
+                  visualDensity: VisualDensity.compact,
                 ),
                 _statusPill(status),
                 PopupMenuButton<String>(
@@ -739,28 +790,67 @@ class _LaporanContentState extends State<_LaporanContent> {
                 ),
                 _infoTag(
                   Icons.flag_outlined,
-                  'Prioritas: ${report['prioritas'] ?? '-'}',
+                  'Prioritas',
+                  report['prioritas']?.toString() ?? '-',
                   priorityColor,
                 ),
               ],
-            ),
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerRight,
-              child: OutlinedButton.icon(
-                onPressed: () => _loadForEdit(report),
-                icon: const Icon(Icons.edit_outlined, size: 17),
-                label: const Text('Edit'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  visualDensity: VisualDensity.compact,
-                ),
-              ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  String _picDisplay(Map<String, dynamic> report) {
+    final ids = (report['id_nik_pic']?.toString() ?? '')
+        .split(',')
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toList();
+    if (ids.isEmpty) return '-';
+
+    final unit =
+        report['nama_unit_pic']?.toString() ??
+        report['unit_pic']?.toString() ??
+        report['id_unit_pic']?.toString();
+    return ids.map((id) => _picLabel(id, unit: unit)).join(', ');
+  }
+
+  String _picLabel(String nik, {String? unit}) {
+    String? name;
+    String? employeeUnit = unit;
+    for (final report in controller.listLaporan) {
+      final reportPics = (report['id_nik_pic']?.toString() ?? '')
+          .split(',')
+          .map((value) => value.trim());
+      if (!reportPics.contains(nik) && report['id_nik']?.toString() != nik) {
+        continue;
+      }
+
+      for (final key in [
+        'nama_karyawan_pic',
+        'nama_pegawai_pic',
+        'nama_pic',
+        'nama_karyawan',
+        'nama_pegawai',
+      ]) {
+        final value = report[key]?.toString().trim();
+        if (value != null && value.isNotEmpty) {
+          name = value;
+          break;
+        }
+      }
+      employeeUnit ??=
+          report['nama_unit_pic']?.toString() ??
+          report['unit_pic']?.toString() ??
+          report['id_unit_pic']?.toString();
+      if (name != null && name.isNotEmpty) break;
+    }
+
+    final displayName = name?.isNotEmpty == true ? name! : nik;
+    if (employeeUnit == null || employeeUnit.isEmpty) return displayName;
+    return '$displayName - $employeeUnit';
   }
 
   Widget _reportCardInfo(IconData icon, String label, String value) {
@@ -780,6 +870,7 @@ class _LaporanContentState extends State<_LaporanContent> {
                   style: const TextStyle(
                     color: AppColors.textWeak,
                     fontSize: 10,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 3),
@@ -790,7 +881,6 @@ class _LaporanContentState extends State<_LaporanContent> {
                   style: const TextStyle(
                     color: AppColors.textStrong,
                     fontSize: 12,
-                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
@@ -807,7 +897,7 @@ class _LaporanContentState extends State<_LaporanContent> {
       ('Pelapor', report['id_nik_pelapor']?.toString() ?? '-'),
       ('Unit pelapor', report['id_unit_pelapor']?.toString() ?? '-'),
       ('Kategori', report['id_kategori']?.toString() ?? '-'),
-      ('PIC', report['id_unit_pic']?.toString() ?? '-'),
+      ('PIC', _picDisplay(report)),
       ('Prioritas', report['prioritas']?.toString() ?? '-'),
       ('Deadline', report['deadline']?.toString() ?? '-'),
       ('Bukti laporan', report['bukti']?.toString() ?? '-'),
@@ -844,7 +934,15 @@ class _LaporanContentState extends State<_LaporanContent> {
                         ),
                       ),
                     ),
-                    _statusPill(report['status']?.toString() ?? 'Pending'),
+                    IconButton(
+                      tooltip: 'Edit laporan',
+                      onPressed: () => _loadForEdit(report),
+                      icon: const Icon(
+                        Icons.edit_outlined,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    _statusPill(_displayStatus(report['status']?.toString())),
                   ],
                 ),
                 const SizedBox(height: 4),
@@ -869,12 +967,6 @@ class _LaporanContentState extends State<_LaporanContent> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    OutlinedButton.icon(
-                      onPressed: () => _loadForEdit(report),
-                      icon: const Icon(Icons.edit_outlined),
-                      label: const Text('Edit'),
-                    ),
-                    const SizedBox(width: 8),
                     TextButton(
                       onPressed: () => setState(() => _viewingReport = null),
                       child: const Text('Kembali ke daftar'),
@@ -1009,7 +1101,7 @@ class _LaporanContentState extends State<_LaporanContent> {
     return BoxDecoration(
       color: AppColors.white,
       borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: AppColors.border),
+      border: Border.all(color: AppColors.divider),
       boxShadow: [
         BoxShadow(
           color: Colors.black.withValues(alpha: 0.04),
@@ -1039,13 +1131,24 @@ class _LaporanContentState extends State<_LaporanContent> {
     );
   }
 
-  Widget _infoTag(IconData icon, String label, Color color) {
+  Widget _infoTag(IconData icon, String label, String value, Color color) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icon, size: 15, color: color),
         const SizedBox(width: 5),
-        Text(label, style: TextStyle(color: color, fontSize: 12)),
+        RichText(
+          text: TextSpan(
+            style: TextStyle(color: color, fontSize: 12),
+            children: [
+              TextSpan(
+                text: '$label: ',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              TextSpan(text: value),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -1069,10 +1172,21 @@ class _LaporanContentState extends State<_LaporanContent> {
   }
 
   Color _statusColor(String status) {
-    return switch (status.toLowerCase()) {
-      'selesai' || 'done' => AppColors.success,
-      'proses' || 'on progress' => AppColors.info,
+    return switch (_displayStatus(status)) {
+      'Done' => AppColors.success,
+      'On Progress' => AppColors.info,
       _ => AppColors.warning,
+    };
+  }
+
+  String _displayStatus(String? status) {
+    return switch (status?.trim().toLowerCase()) {
+      'done' || 'selesai' => 'Done',
+      'on progress' ||
+      'on progres' ||
+      'proses' ||
+      'in progress' => 'On Progress',
+      _ => 'Open',
     };
   }
 

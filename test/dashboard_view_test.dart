@@ -85,6 +85,23 @@ void main() {
     expect(find.text('Tanggal laporan'), findsWidgets);
     expect(find.text('Deadline'), findsWidgets);
     expect(find.text('Last update by'), findsWidgets);
+    final subjectField = tester.getRect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is TextField &&
+            widget.decoration?.hintText == 'Ringkasan perihal kendala...',
+      ),
+    );
+    final evidenceField = tester.getRect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is TextField &&
+            widget.decoration?.hintText ==
+                'Pilih atau masukkan nama file bukti',
+      ),
+    );
+    expect(evidenceField.top, lessThan(subjectField.top));
+    expect(subjectField.width, greaterThan(evidenceField.width));
 
     await tester.ensureVisible(find.text('Kerusakan AC Ruang IGD'));
     await tester.tap(find.text('Kerusakan AC Ruang IGD'));
@@ -92,12 +109,13 @@ void main() {
     expect(find.text('Detail Laporan'), findsOneWidget);
     expect(find.text('UNIT-IGD'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('Kembali ke daftar'));
     await tester.tap(find.text('Kembali ke daftar'));
     await tester.pumpAndSettle();
     expect(find.text('Kirim'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('Edit').first);
-    await tester.tap(find.text('Edit').first);
+    await tester.ensureVisible(find.byTooltip('Edit laporan').first);
+    await tester.tap(find.byTooltip('Edit laporan').first);
     await tester.pumpAndSettle();
     expect(find.text('Perbarui'), findsOneWidget);
 
@@ -106,6 +124,27 @@ void main() {
 
     expect(Get.currentRoute, Routes.DASHBOARD);
     expect(find.text('Prioritas tindak lanjut'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('report form uses two columns on a mobile viewport', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(Get.reset);
+
+    await tester.pumpWidget(
+      GetMaterialApp(initialRoute: Routes.LAPORAN, getPages: AppPages.routes),
+    );
+    await tester.pump(const Duration(seconds: 2));
+
+    final reportDate = tester.getRect(find.text('Tanggal laporan').first);
+    final eventDate = tester.getRect(find.text('Tanggal kejadian'));
+    expect(reportDate.top, closeTo(eventDate.top, 1));
+    expect(reportDate.left, lessThan(eventDate.left));
     expect(tester.takeException(), isNull);
   });
 }

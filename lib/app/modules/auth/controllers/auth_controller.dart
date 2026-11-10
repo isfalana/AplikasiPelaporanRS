@@ -8,6 +8,19 @@ import '../../../data/services/api_services.dart';
 import '../../../routes/app_pages.dart';
 
 class AuthController extends GetxController {
+  static const demoAccounts = <String, Map<String, String>>{
+    'NIK-002': {
+      'password': '123456',
+      'name': 'PIC Umum',
+      'unit': 'UNIT-UMUM',
+    },
+    'NIK-004': {
+      'password': '123456',
+      'name': 'PIC IT',
+      'unit': 'UNIT-IT',
+    },
+  };
+
   final usernameController = TextEditingController();
   final passwordController = TextEditingController();
   
@@ -15,6 +28,13 @@ class AuthController extends GetxController {
   var isPasswordHidden = true.obs;
 
   void togglePasswordView() => isPasswordHidden.value = !isPasswordHidden.value;
+
+  void selectDemoAccount(String nik) {
+    final account = demoAccounts[nik];
+    if (account == null) return;
+    usernameController.text = nik;
+    passwordController.text = account['password']!;
+  }
 
   // Future<void> login() async {
   //   if (usernameController.text.isEmpty || passwordController.text.isEmpty) {
@@ -78,9 +98,22 @@ class AuthController extends GetxController {
   // }
 
   Future<void> login() async {
-    if (usernameController.text.isEmpty || passwordController.text.isEmpty) {
+    final nik = usernameController.text.trim().toUpperCase();
+    final password = passwordController.text;
+    if (nik.isEmpty || password.isEmpty) {
       Get.snackbar('Error', 'Username dan Password tidak boleh kosong', 
           backgroundColor: Colors.redAccent, colorText: Colors.white);
+      return;
+    }
+
+    final account = demoAccounts[nik];
+    if (account == null || account['password'] != password) {
+      Get.snackbar(
+        'Login gagal',
+        'Gunakan salah satu akun demo yang tersedia.',
+        backgroundColor: Colors.redAccent,
+        colorText: Colors.white,
+      );
       return;
     }
 
@@ -92,10 +125,11 @@ class AuthController extends GetxController {
       // Simulasi simpan data dummy ke SharedPreferences (biar aman kalau halaman lain butuh)
       SharedPreferences prefs = await SharedPreferences.getInstance();
       await prefs.setString('jwt_token', 'dummy_token_12345');
-      await prefs.setString('unit_name', 'Unit IT / IGD');
-      await prefs.setString('id_nik', usernameController.text.trim());
+      await prefs.setString('unit_name', account['unit']!);
+      await prefs.setString('id_nik', nik);
+      await prefs.setString('nama_karyawan', account['name']!);
 
-      Get.snackbar('Sukses (Mock Mode)', 'Berhasil Login!', 
+      Get.snackbar('Sukses (Mock Mode)', 'Berhasil Login sebagai ${account['name']}!',
           backgroundColor: Colors.green, colorText: Colors.white);
       
       // Langsung meluncur ke Dashboard!

@@ -1,8 +1,10 @@
 // lib/app/routes/app_pages.dart
 import 'package:aplikasilaporan/app/modules/auth/bindings/dashboard_binding.dart';
-import 'package:aplikasilaporan/app/modules/auth/bindings/laporan_binding.dart';
+import 'package:aplikasilaporan/app/modules/laporan/bindings/laporan_binding.dart';
+import 'package:aplikasilaporan/app/modules/tindakan/bindings/tindakan_binding.dart';
 import 'package:aplikasilaporan/app/modules/auth/views/dashboard_view.dart';
-import 'package:aplikasilaporan/app/modules/auth/views/laporan_view.dart';
+import 'package:aplikasilaporan/app/modules/laporan/views/laporan_view.dart';
+import 'package:aplikasilaporan/app/modules/tindakan/view/tindakan.dart';
 import 'package:get/get.dart';
 // Import nanti jika module sudah dibuat
 import '../modules/auth/bindings/auth_binding.dart';
@@ -39,6 +41,11 @@ class AppPages {
       binding: LaporanBinding(),
       transition: Transition.noTransition,
     ),
-    
+    GetPage(
+      name: Routes.TINDAKAN,
+      page: () => const TindakanView(),
+      binding: TindakanBinding(),
+      transition: Transition.noTransition,
+    ),
   ];
 }

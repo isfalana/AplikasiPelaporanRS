@@ -5,11 +5,43 @@ import '../core/theme/app_colors.dart';
 import '../routes/app_pages.dart';
 
 class SidebarWidget extends StatelessWidget {
+  static const backgroundColor = AppColors.sidebarDark;
+
+  static PreferredSizeWidget mobileAppBar({
+    required String title,
+    List<Widget> actions = const [],
+  }) {
+    return AppBar(
+      title: Text(
+        title,
+        style: const TextStyle(
+          color: AppColors.textStrong,
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      backgroundColor: AppColors.white,
+      surfaceTintColor: AppColors.white,
+      elevation: 0,
+      iconTheme: const IconThemeData(color: AppColors.textStrong),
+      actions: actions,
+    );
+  }
+
+  static Widget mobileDrawer({required Widget child}) {
+    return Drawer(
+      width: 280,
+      backgroundColor: backgroundColor,
+      child: SafeArea(child: child),
+    );
+  }
+
   const SidebarWidget({
     required this.isCollapsed,
     required this.isMobile,
     required this.currentRoute,
     required this.unitName,
+    required this.employeeName,
     required this.isMasterExpanded,
     required this.onMasterMenuTap,
     super.key,
@@ -19,13 +51,24 @@ class SidebarWidget extends StatelessWidget {
   final bool isMobile;
   final String currentRoute;
   final String unitName;
+  final String employeeName;
   final bool isMasterExpanded;
   final VoidCallback onMasterMenuTap;
 
   @override
   Widget build(BuildContext context) {
+    final profileName = employeeName.trim().isNotEmpty
+        ? employeeName.trim()
+        : unitName.trim();
+    final initials = profileName
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .take(2)
+        .map((part) => part.substring(0, 1).toUpperCase())
+        .join();
+
     return Container(
-      color: AppColors.sidebarDark,
+      color: backgroundColor,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -95,9 +138,9 @@ class SidebarWidget extends StatelessWidget {
           _buildSidebarItem(
             icon: Icons.task_alt_outlined,
             title: 'Tindakan',
-            isSelected: false,
+            isSelected: currentRoute == Routes.TINDAKAN,
             isCollapsed: isCollapsed,
-            onTap: () => _showModuleUnavailable('Tindakan'),
+            onTap: _openActions,
           ),
           const SizedBox(height: 18),
           if (!isCollapsed)
@@ -130,24 +173,41 @@ class SidebarWidget extends StatelessWidget {
                 CircleAvatar(
                   radius: 17,
                   backgroundColor: AppColors.primary.withValues(alpha: 0.25),
-                  child: const Icon(
-                    Icons.person_outline,
-                    color: AppColors.white,
-                    size: 19,
+                  child: Text(
+                    initials.isEmpty ? 'P' : initials,
+                    style: const TextStyle(
+                      color: AppColors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
                 if (!isCollapsed) ...[
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Text(
-                      unitName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          profileName.isEmpty ? 'Pengguna' : profileName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          unitName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.textWeak,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -300,17 +360,15 @@ class SidebarWidget extends StatelessWidget {
     Get.offNamed(Routes.LAPORAN);
   }
 
-  void _showModuleUnavailable(String title) {
+  void _openActions() {
+    if (currentRoute == Routes.TINDAKAN) {
+      if (isMobile) Get.back();
+      return;
+    }
+
     if (isMobile) {
       Get.back();
     }
-    Get.snackbar(
-      title,
-      'Halaman modul ini belum tersedia.',
-      snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: AppColors.sidebarDark,
-      colorText: AppColors.white,
-      margin: const EdgeInsets.all(16),
-    );
+    Get.offNamed(Routes.TINDAKAN);
   }
 }
