@@ -24,10 +24,17 @@ class LoginView extends GetView<AuthController> {
               border: Border.all(color: AppColors.border),
               boxShadow: [
                 BoxShadow(
+<<<<<<< HEAD
                   color: AppColors.primary.withValues(alpha: 0.06),
                   blurRadius: 28,
                   offset: const Offset(0, 10),
                 ),
+=======
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                )
+>>>>>>> origin/master
               ],
             ),
             child: _buildLoginForm(context, isMobile: false),
@@ -51,6 +58,7 @@ class LoginView extends GetView<AuthController> {
               constraints: BoxConstraints(
                 minHeight: constraints.maxHeight - verticalPadding,
               ),
+<<<<<<< HEAD
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -65,6 +73,53 @@ class LoginView extends GetView<AuthController> {
                       height: 1.25,
                       letterSpacing: -0.4,
                     ),
+=======
+            ),
+            const SizedBox(height: 12),
+            
+            // Subjudul
+            const Text(
+              'Masukan akun anda untuk masuk ke dalam aplikasi',
+              textAlign: TextAlign.left,
+              style: TextStyle(color: AppColors.textStrong, fontSize: 14),
+            ),
+            const SizedBox(height: 32),
+            
+            // Label dan Input Username
+            const Text('Username', style: TextStyle(color: AppColors.textStrong, fontSize: 14)),
+            const SizedBox(height: 8),
+            TextField(
+              controller: controller.usernameController,
+              decoration: InputDecoration(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: AppColors.border),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: AppColors.border),
+                ),
+                filled: true,
+                fillColor: AppColors.white,
+              ),
+            ),
+            const SizedBox(height: 20),
+            
+            // Label dan Input Kata Sandi
+            const Text('Kata Sandi', style: TextStyle(color: AppColors.textStrong, fontSize: 14)),
+            const SizedBox(height: 8),
+            Obx(() => TextField(
+              controller: controller.passwordController,
+              obscureText: controller.isPasswordHidden.value,
+              onSubmitted: (_) => controller.login(),
+              decoration: InputDecoration(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    controller.isPasswordHidden.value ? Icons.visibility_off : Icons.visibility,
+                    color: AppColors.textWeak,
+>>>>>>> origin/master
                   ),
                   const SizedBox(height: 10),
                   const Text(

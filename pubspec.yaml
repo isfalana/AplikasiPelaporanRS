@@ -41,6 +41,8 @@ dependencies:
   get: ^4.6.6
   dio: ^5.4.0
   shared_preferences: ^2.2.2
+  intl: ^0.20.3
+  file_picker: ^8.0.7
 
 dev_dependencies:
   flutter_test:

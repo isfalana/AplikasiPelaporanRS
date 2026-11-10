@@ -119,6 +119,7 @@ class AuthController extends GetxController {
 
     isLoading.value = true;
     try {
+<<<<<<< HEAD
       // --- SIMULASI LOGIN LOKAL (TANPA KE BACKEND) ---
       await Future.delayed(const Duration(milliseconds: 800)); // Efek loading sebentar
 
@@ -135,6 +136,80 @@ class AuthController extends GetxController {
       // Langsung meluncur ke Dashboard!
       Get.offAllNamed(Routes.DASHBOARD);
 
+=======
+      // 1. Dapatkan FCM Token sesuai platform
+      String? fcmToken;
+      try {
+        if (kIsWeb) {
+          fcmToken = "web_token_${usernameController.text.trim()}";
+        } else if (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS) {
+          fcmToken = await FirebaseMessaging.instance.getToken();
+        } else {
+          // Windows Desktop atau OS Desktop lainnya
+          fcmToken = "desktop_${defaultTargetPlatform.name}_${usernameController.text.trim()}";
+        }
+      } catch (e) {
+        debugPrint('FCM Error: $e');
+        fcmToken = "fallback_token_${DateTime.now().millisecondsSinceEpoch}";
+      }
+
+      fcmToken ??= "fallback_token_${DateTime.now().millisecondsSinceEpoch}";
+
+      // 2. Eksekusi Login ke Backend Node.js
+      Dio dio = await ApiService.getClient();
+      final response = await dio.post('/auth/login', data: {
+        "id_nik": usernameController.text.trim(),
+        "password": passwordController.text.trim(),
+        "fcm_token": fcmToken // Mengirimkan fcm_token ke backend
+      });
+
+      // 3. Simpan Sesi jika berhasil
+      if (response.statusCode == 200) {
+        final String token = response.data['token'];
+        final Map<String, dynamic> userData = response.data['data'] ?? {};
+        final String idNik = userData['id_nik']?.toString() ?? usernameController.text.trim();
+        final String namaKaryawan = userData['nama_karyawan']?.toString() ?? '';
+        final String namaUnit = userData['nama_unit']?.toString() ?? 'Unit';
+        final String idUnit = userData['id_unit']?.toString() ?? '';
+        final String idRole = userData['id_role']?.toString() ?? '';
+        final String namaRole = userData['nama_role']?.toString() ?? 'User';
+
+        SharedPreferences prefs = await SharedPreferences.getInstance();
+        await prefs.setString('jwt_token', token);
+        await prefs.setString('id_nik', idNik);
+        await prefs.setString('nama_karyawan', namaKaryawan);
+        await prefs.setString('unit_name', namaUnit);
+        await prefs.setString('nama_unit', namaUnit);
+        await prefs.setString('id_unit', idUnit);
+        await prefs.setString('id_role', idRole);
+        await prefs.setString('nama_role', namaRole);
+        await prefs.setString('fcm_token', fcmToken);
+
+        debugPrint('====================================');
+        debugPrint('✅ LOGIN BERHASIL');
+        debugPrint('🔑 JWT Token: $token');
+        debugPrint('📲 FCM Token: $fcmToken');
+        debugPrint('👤 User: $namaKaryawan ($idNik) - Unit: $namaUnit');
+        debugPrint('====================================');
+
+        Get.snackbar(
+          'Sukses',
+          'Berhasil Login sebagai $namaUnit ($namaKaryawan)',
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+          snackPosition: SnackPosition.TOP,
+        );
+
+        Get.offAllNamed(Routes.DASHBOARD);
+      }
+    } on DioException catch (e) {
+      String errorMessage = 'Gagal menghubungi server';
+      if (e.response != null && e.response?.data != null) {
+         errorMessage = e.response?.data['message'] ?? errorMessage;
+      }
+      Get.snackbar('Login Gagal', errorMessage, 
+          backgroundColor: Colors.redAccent, colorText: Colors.white);
+>>>>>>> origin/master
     } catch (e) {
       Get.snackbar('Error', 'Terjadi kesalahan sistem: $e', 
           backgroundColor: Colors.redAccent, colorText: Colors.white);
