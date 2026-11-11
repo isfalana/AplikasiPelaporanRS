@@ -535,7 +535,7 @@ class _LaporanContentState extends State<_LaporanContent> {
               OutlinedButton(
                 onPressed: _resetForm,
                 style: AppButtons.outlined,
-                child: const Text('Batal'),
+                child: const Text('Reset'),
               ),
             ],
           ),
