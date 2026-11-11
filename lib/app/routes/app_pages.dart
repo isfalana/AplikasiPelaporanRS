@@ -6,6 +6,9 @@ import 'package:aplikasilaporan/app/modules/auth/views/dashboard_view.dart';
 import 'package:aplikasilaporan/app/modules/laporan/views/laporan_view.dart';
 import 'package:aplikasilaporan/app/modules/tindakan/view/tindakan.dart';
 import 'package:get/get.dart';
+
+import '../modules/report/bindings/report_binding.dart';
+import '../modules/report/views/report_view.dart';
 // Import nanti jika module sudah dibuat
 import '../modules/auth/bindings/auth_binding.dart';
 import '../modules/auth/views/login_view.dart';
@@ -23,7 +26,7 @@ class AppPages {
       binding: AuthBinding(),
     ),
     // Kita komentari dulu sampai view-nya dibuat
-    
+
     // GetPage(
     //   name: Routes.LOGIN,
     //   page: () => const LoginView(),
@@ -45,6 +48,12 @@ class AppPages {
       name: Routes.TINDAKAN,
       page: () => const TindakanView(),
       binding: TindakanBinding(),
+      transition: Transition.noTransition,
+    ),
+    GetPage(
+      name: Routes.REPORT,
+      page: () => const ReportView(),
+      binding: ReportBinding(),
       transition: Transition.noTransition,
     ),
   ];

@@ -6,4 +6,5 @@ abstract class Routes {
   static const DASHBOARD = '/dashboard';
   static const LAPORAN = '/pelaporan';
   static const TINDAKAN = '/tindakan';
+  static const REPORT = '/report';
 }

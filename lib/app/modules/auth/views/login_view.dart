@@ -212,7 +212,7 @@ class LoginView extends GetView<AuthController> {
                             alpha: 0.65,
                           ),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(8),
                           ),
                           elevation: 0,
                         ),

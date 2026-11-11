@@ -91,6 +91,9 @@ void main() {
     expect(savedReport['status'], 'On Progress');
     final savedDetail =
         (savedReport['detail_tindakan'] as List<Map<String, dynamic>>).single;
+    expect(savedReport['progres_tindakan'], [
+      {'id_detail': savedDetail['id_detail'], 'selesai': true},
+    ]);
     expect(savedDetail.keys.toSet(), {
       'id_detail',
       'id_laporan',
@@ -98,6 +101,14 @@ void main() {
       'deskripsi_tindakan',
       'file_lampiran',
     });
+    Get.offNamed(Routes.LAPORAN);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Kerusakan AC Ruang IGD').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Memeriksa unit AC'), findsOneWidget);
+    expect(find.text('Pemeriksaan awal selesai.'), findsOneWidget);
+    expect(find.text('Selesai'), findsOneWidget);
+    expect(find.text('On Progress'), findsWidgets);
     expect(tester.takeException(), isNull);
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();

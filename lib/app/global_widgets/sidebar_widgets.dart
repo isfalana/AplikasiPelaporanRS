@@ -44,6 +44,7 @@ class SidebarWidget extends StatelessWidget {
     required this.employeeName,
     required this.isMasterExpanded,
     required this.onMasterMenuTap,
+    required this.onLogout,
     super.key,
   });
 
@@ -54,6 +55,7 @@ class SidebarWidget extends StatelessWidget {
   final String employeeName;
   final bool isMasterExpanded;
   final VoidCallback onMasterMenuTap;
+  final VoidCallback onLogout;
 
   @override
   Widget build(BuildContext context) {
@@ -142,6 +144,13 @@ class SidebarWidget extends StatelessWidget {
             isCollapsed: isCollapsed,
             onTap: _openActions,
           ),
+          _buildSidebarItem(
+            icon: Icons.assessment_outlined,
+            title: 'Report',
+            isSelected: currentRoute == Routes.REPORT,
+            isCollapsed: isCollapsed,
+            onTap: _openReport,
+          ),
           const SizedBox(height: 18),
           if (!isCollapsed)
             const Padding(
@@ -158,64 +167,228 @@ class SidebarWidget extends StatelessWidget {
             ),
           _buildMasterMenu(),
           const Spacer(),
-          Padding(
-            padding: EdgeInsets.fromLTRB(
-              isCollapsed ? 12 : 20,
-              12,
-              isCollapsed ? 12 : 20,
-              20,
+          PopupMenuButton<String>(
+            tooltip: 'Menu akun',
+            color: AppColors.white,
+            elevation: 3,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Row(
-              mainAxisAlignment: isCollapsed
-                  ? MainAxisAlignment.center
-                  : MainAxisAlignment.start,
-              children: [
-                CircleAvatar(
-                  radius: 17,
-                  backgroundColor: AppColors.primary.withValues(alpha: 0.25),
-                  child: Text(
-                    initials.isEmpty ? 'P' : initials,
-                    style: const TextStyle(
-                      color: AppColors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+            constraints: const BoxConstraints(minWidth: 230),
+            onSelected: (value) {
+              if (value == 'profile') {
+                _showProfile(context, profileName, unitName, initials);
+              } else if (value == 'logout') {
+                onLogout();
+              }
+            },
+            itemBuilder: (context) => [
+              // Header menu: nama dan unit pengguna.
+              PopupMenuItem<String>(
+                enabled: false,
+                height: 62,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      profileName.isEmpty ? 'Pengguna' : profileName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textStrong,
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 2),
+                    Text(
+                      unitName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textWeak,
+                      ),
+                    ),
+                  ],
                 ),
-                if (!isCollapsed) ...[
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          profileName.isEmpty ? 'Pengguna' : profileName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppColors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        Text(
-                          unitName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppColors.textWeak,
-                            fontSize: 10,
-                          ),
-                        ),
-                      ],
+              ),
+              const PopupMenuDivider(height: 1),
+              const PopupMenuItem(
+                value: 'profile',
+                height: 46,
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.person_outline_rounded,
+                      size: 19,
+                      color: AppColors.primary,
+                    ),
+                    SizedBox(width: 12),
+                    Text(
+                      'Lihat profil',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textStrong,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'logout',
+                height: 46,
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.logout_outlined,
+                      size: 19,
+                      color: AppColors.error,
+                    ),
+                    SizedBox(width: 12),
+                    Text(
+                      'Keluar akun',
+                      style: TextStyle(fontSize: 13, color: AppColors.error),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                isCollapsed ? 12 : 20,
+                12,
+                isCollapsed ? 12 : 20,
+                20,
+              ),
+              child: Row(
+                mainAxisAlignment: isCollapsed
+                    ? MainAxisAlignment.center
+                    : MainAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    radius: 17,
+                    backgroundColor: AppColors.primary.withValues(alpha: 0.25),
+                    child: Text(
+                      initials.isEmpty ? 'P' : initials,
+                      style: const TextStyle(
+                        color: AppColors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
+                  if (!isCollapsed) ...[
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            profileName.isEmpty ? 'Pengguna' : profileName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppColors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            unitName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppColors.textWeak,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(
+                      Icons.more_vert,
+                      color: AppColors.textWeak,
+                      size: 18,
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  void _showProfile(
+    BuildContext context,
+    String name,
+    String unit,
+    String initials,
+  ) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Profil pengguna'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(
+              radius: 28,
+              backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+              child: Text(
+                initials.isEmpty ? 'P' : initials,
+                style: const TextStyle(
+                  color: AppColors.primary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            _profileValue('Nama', name.isEmpty ? 'Pengguna' : name),
+            const SizedBox(height: 12),
+            _profileValue('Unit', unit),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Tutup'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _profileValue(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            label,
+            style: const TextStyle(color: AppColors.textWeak, fontSize: 12),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            value.isEmpty ? '-' : value,
+            style: const TextStyle(
+              color: AppColors.textStrong,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -370,5 +543,15 @@ class SidebarWidget extends StatelessWidget {
       Get.back();
     }
     Get.offNamed(Routes.TINDAKAN);
+  }
+
+  void _openReport() {
+    if (currentRoute == Routes.REPORT) {
+      if (isMobile) Get.back();
+      return;
+    }
+
+    if (isMobile) Get.back();
+    Get.offNamed(Routes.REPORT);
   }
 }

@@ -19,6 +19,9 @@ class DashboardController extends GetxController {
   var listLaporan = <Map<String, dynamic>>[].obs;
   var isLoading = true.obs;
 
+  // Filter aktif pada card "Prioritas tindak lanjut".
+  var priorityFilter = 'all'.obs;
+
   @override
   void onInit() {
     super.onInit();

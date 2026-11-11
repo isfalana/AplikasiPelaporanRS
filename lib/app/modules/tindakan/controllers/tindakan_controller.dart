@@ -18,6 +18,9 @@ class TindakanController extends GetxController {
   final actionInputController = TextEditingController();
   final noteController = TextEditingController();
 
+  // Filter aktif pada card "Daftar Tindakan".
+  final listFilter = 'all'.obs;
+
   final Map<String, List<Map<String, dynamic>>> _detailsByReport = {};
 
   List<Map<String, dynamic>> get reportsForCurrentUser {
@@ -50,8 +53,7 @@ class TindakanController extends GetxController {
     } else if (selectedReport.value != null &&
         !reports.any(
           (report) =>
-              report['id_laporan'] ==
-              selectedReport.value?['id_laporan'],
+              report['id_laporan'] == selectedReport.value?['id_laporan'],
         )) {
       selectedReport.value = reports.isEmpty ? null : reports.first;
       if (selectedReport.value != null) {
@@ -101,11 +103,17 @@ class TindakanController extends GetxController {
         _detailsFromReport(
           report['detail_tindakan'] ?? report['detailTindakan'],
         );
+    final savedProgress = _progressFromReport(report['progres_tindakan']);
     actionItems.assignAll(
-      savedDetails.map(
-        (item) => Map<String, dynamic>.from(item)
-          ..putIfAbsent('selesai', () => false),
-      ),
+      savedDetails.map((item) {
+        final action = Map<String, dynamic>.from(item);
+        final detailId = action['id_detail']?.toString();
+        if (detailId != null && savedProgress.containsKey(detailId)) {
+          action['selesai'] = savedProgress[detailId];
+        }
+        action.putIfAbsent('selesai', () => false);
+        return action;
+      }),
     );
     selectedStatus.value = _normalizeStatus(report['status']?.toString());
     noteController.text = report['keterangan_tindakan']?.toString() ?? '';
@@ -119,11 +127,22 @@ class TindakanController extends GetxController {
         .toList();
   }
 
+  Map<String, bool> _progressFromReport(dynamic value) {
+    if (value is! List) return {};
+    return {
+      for (final item in value.whereType<Map>())
+        if (item['id_detail'] != null)
+          item['id_detail'].toString(): item['selesai'] == true,
+    };
+  }
+
   String _normalizeStatus(String? status) {
     return switch (status?.trim().toLowerCase()) {
       'done' || 'selesai' => 'Done',
-      'on progress' || 'on progres' || 'proses' || 'in progress' =>
-        'On Progress',
+      'on progress' ||
+      'on progres' ||
+      'proses' ||
+      'in progress' => 'On Progress',
       _ => 'Open',
     };
   }
@@ -186,6 +205,14 @@ class TindakanController extends GetxController {
             'id_nik_pic': item['id_nik_pic'],
             'deskripsi_tindakan': item['deskripsi_tindakan'],
             'file_lampiran': item['file_lampiran'],
+          },
+        )
+        .toList();
+    report['progres_tindakan'] = details
+        .map(
+          (item) => <String, dynamic>{
+            'id_detail': item['id_detail'],
+            'selesai': item['selesai'] == true,
           },
         )
         .toList();

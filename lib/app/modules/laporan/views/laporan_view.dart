@@ -2,138 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../auth/controllers/dashboard_controller.dart';
 import '../controllers/laporan_controller.dart';
+import '../../../core/theme/app_buttons.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../global_widgets/sidebar_widgets.dart';
-import '../../../routes/app_pages.dart';
+import '../../../global_widgets/filter_menu_button.dart';
+import '../../../global_widgets/main_layout_widget.dart';
 
 class LaporanView extends GetView<LaporanController> {
   const LaporanView({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // Memanggil atau mendaftarkan DashboardController untuk state sidebar
-    final dashboardController = Get.isRegistered<DashboardController>()
-        ? Get.find<DashboardController>()
-        : Get.put(DashboardController());
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isMobile = constraints.maxWidth < 800;
-
-        return Scaffold(
-          backgroundColor: AppColors.surface,
-          appBar: isMobile
-              ? SidebarWidget.mobileAppBar(title: 'Daftar Laporan RS')
-              : null,
-          drawer: isMobile
-              ? SidebarWidget.mobileDrawer(
-                  child: _buildSidebar(
-                    dashboardController,
-                    isCollapsed: false,
-                    isMobile: true,
-                  ),
-                )
-              : null,
-          body: isMobile
-              ? _buildContent()
-              : Obx(() {
-                  final isCollapsed =
-                      dashboardController.isSidebarCollapsed.value;
-                  return Row(
-                    children: [
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 220),
-                        curve: Curves.easeInOut,
-                        width: isCollapsed ? 76 : 248,
-                        child: _buildSidebar(
-                          dashboardController,
-                          isCollapsed: isCollapsed,
-                          isMobile: false,
-                        ),
-                      ),
-                      Expanded(
-                        child: Column(
-                          children: [
-                            _buildDesktopAppBar(dashboardController),
-                            Expanded(child: _buildContent()),
-                          ],
-                        ),
-                      ),
-                    ],
-                  );
-                }),
-        );
-      },
+    return MainLayoutWidget(
+      title: 'Daftar Laporan RS',
+      child: _LaporanContent(controller: controller),
     );
-  }
-
-  Widget _buildDesktopAppBar(DashboardController dashboardController) {
-    return Container(
-      height: 68,
-      padding: const EdgeInsets.symmetric(horizontal: 28),
-      decoration: const BoxDecoration(
-        color: AppColors.white,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            tooltip: dashboardController.isSidebarCollapsed.value
-                ? 'Buka sidebar'
-                : 'Ciutkan sidebar',
-            onPressed: dashboardController.isSidebarCollapsed.toggle,
-            icon: const Icon(Icons.menu_rounded, color: AppColors.textStrong),
-          ),
-          const SizedBox(width: 12),
-          const Text(
-            'Daftar Laporan RS',
-            style: TextStyle(
-              color: AppColors.textStrong,
-              fontSize: 17,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const Spacer(),
-          TextButton.icon(
-            onPressed: dashboardController.logout,
-            icon: const Icon(Icons.logout_outlined, size: 18),
-            label: const Text('Keluar'),
-            style: TextButton.styleFrom(foregroundColor: AppColors.textWeak),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSidebar(
-    DashboardController dashboardController, {
-    required bool isCollapsed,
-    required bool isMobile,
-  }) {
-    return Obx(
-      () => SidebarWidget(
-        isCollapsed: isCollapsed,
-        isMobile: isMobile,
-        currentRoute: Routes.LAPORAN,
-        unitName: dashboardController.unitName.value,
-        employeeName: dashboardController.employeeName.value,
-        isMasterExpanded: dashboardController.isMasterExpanded.value,
-        onMasterMenuTap: () {
-          if (isCollapsed) {
-            dashboardController.isSidebarCollapsed.value = false;
-            dashboardController.isMasterExpanded.value = true;
-          } else {
-            dashboardController.isMasterExpanded.toggle();
-          }
-        },
-      ),
-    );
-  }
-
-  Widget _buildContent() {
-    return _LaporanContent(controller: controller);
   }
 }
 
@@ -159,6 +42,9 @@ class _LaporanContentState extends State<_LaporanContent> {
   final List<String> _selectedPics = [];
   Map<String, dynamic>? _editingReport;
   Map<String, dynamic>? _viewingReport;
+
+  // Filter aktif pada card "Daftar Laporan".
+  String _reportFilter = 'all';
 
   LaporanController get controller => widget.controller;
 
@@ -375,7 +261,10 @@ class _LaporanContentState extends State<_LaporanContent> {
   @override
   Widget build(BuildContext context) {
     if (_viewingReport case final report?) {
-      return _buildDetail(report);
+      return Obx(() {
+        widget.controller.listLaporan.length;
+        return _buildDetail(report);
+      });
     }
 
     return LayoutBuilder(
@@ -457,13 +346,25 @@ class _LaporanContentState extends State<_LaporanContent> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Daftar Laporan',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: AppColors.textStrong,
-          ),
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Daftar Laporan',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textStrong,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            FilterMenuButton(
+              value: _reportFilter,
+              entries: reportFilterEntries(),
+              onSelected: (value) => setState(() => _reportFilter = value),
+            ),
+          ],
         ),
         const SizedBox(height: 12),
         Obx(() {
@@ -481,6 +382,7 @@ class _LaporanContentState extends State<_LaporanContent> {
 
           return Column(
             children: controller.listLaporan
+                .where((report) => matchesReportFilter(report, _reportFilter))
                 .map(
                   (report) => Padding(
                     padding: const EdgeInsets.only(bottom: 14),
@@ -626,21 +528,15 @@ class _LaporanContentState extends State<_LaporanContent> {
             children: [
               ElevatedButton(
                 onPressed: _submitReport,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: AppColors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 28,
-                    vertical: 12,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
+                style: AppButtons.primary,
                 child: Text(_editingReport == null ? 'Kirim' : 'Perbarui'),
               ),
               const SizedBox(width: 12),
-              OutlinedButton(onPressed: _resetForm, child: const Text('Batal')),
+              OutlinedButton(
+                onPressed: _resetForm,
+                style: AppButtons.outlined,
+                child: const Text('Batal'),
+              ),
             ],
           ),
         ],
@@ -901,8 +797,9 @@ class _LaporanContentState extends State<_LaporanContent> {
       ('Prioritas', report['prioritas']?.toString() ?? '-'),
       ('Deadline', report['deadline']?.toString() ?? '-'),
       ('Bukti laporan', report['bukti']?.toString() ?? '-'),
-      ('Keterangan', report['keterangan']?.toString() ?? '-'),
     ];
+    final actionDetails = _actionDetails(report['detail_tindakan']);
+    final actionProgress = _actionProgress(report['progres_tindakan']);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -963,6 +860,73 @@ class _LaporanContentState extends State<_LaporanContent> {
                       )
                       .toList(),
                 ),
+                const Divider(height: 32),
+                const Text(
+                  'Tindak lanjut',
+                  style: TextStyle(
+                    color: AppColors.textStrong,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (actionDetails.isEmpty)
+                  const Text(
+                    'Belum ada tindakan yang dicatat.',
+                    style: TextStyle(color: AppColors.textWeak, fontSize: 13),
+                  )
+                else
+                  Column(
+                    children: actionDetails.map((action) {
+                      final detailId = action['id_detail']?.toString();
+                      final isDone = detailId == null
+                          ? false
+                          : actionProgress[detailId] ?? false;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              isDone
+                                  ? Icons.check_circle
+                                  : Icons.radio_button_unchecked,
+                              size: 18,
+                              color: isDone
+                                  ? AppColors.success
+                                  : AppColors.textWeak,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                action['deskripsi_tindakan']?.toString() ?? '-',
+                                style: const TextStyle(
+                                  color: AppColors.textStrong,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              isDone ? 'Selesai' : 'Belum selesai',
+                              style: TextStyle(
+                                color: isDone
+                                    ? AppColors.success
+                                    : AppColors.textWeak,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                const SizedBox(height: 12),
+                _detailField(
+                  'Keterangan tindak lanjut',
+                  report['keterangan_tindakan']?.toString() ?? '-',
+                ),
                 const SizedBox(height: 20),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -979,6 +943,20 @@ class _LaporanContentState extends State<_LaporanContent> {
         ],
       ),
     );
+  }
+
+  List<Map<String, dynamic>> _actionDetails(dynamic value) {
+    if (value is! List) return [];
+    return value.whereType<Map>().map(Map<String, dynamic>.from).toList();
+  }
+
+  Map<String, bool> _actionProgress(dynamic value) {
+    if (value is! List) return {};
+    return {
+      for (final item in value.whereType<Map>())
+        if (item['id_detail'] != null)
+          item['id_detail'].toString(): item['selesai'] == true,
+    };
   }
 
   Widget _dropdownField({
