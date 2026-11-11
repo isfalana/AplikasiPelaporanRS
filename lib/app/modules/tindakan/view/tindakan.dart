@@ -1,136 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import '../../auth/controllers/dashboard_controller.dart';
 import '../controllers/tindakan_controller.dart';
+import '../../../core/theme/app_buttons.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../global_widgets/sidebar_widgets.dart';
-import '../../../routes/app_pages.dart';
+import '../../../global_widgets/filter_menu_button.dart';
+import '../../../global_widgets/main_layout_widget.dart';
 
 class TindakanView extends GetView<TindakanController> {
   const TindakanView({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final dashboardController = Get.isRegistered<DashboardController>()
-        ? Get.find<DashboardController>()
-        : Get.put(DashboardController());
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isMobile = constraints.maxWidth < 800;
-        return Scaffold(
-          backgroundColor: AppColors.surface,
-          appBar: isMobile
-              ? SidebarWidget.mobileAppBar(title: 'Tindakan')
-              : null,
-          drawer: isMobile
-              ? SidebarWidget.mobileDrawer(
-                  child: _buildSidebar(
-                    dashboardController,
-                    isCollapsed: false,
-                    isMobile: true,
-                  ),
-                )
-              : null,
-          body: isMobile
-              ? _buildContent()
-              : Obx(() {
-                  final isCollapsed =
-                      dashboardController.isSidebarCollapsed.value;
-                  return Row(
-                    children: [
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 220),
-                        curve: Curves.easeInOut,
-                        width: isCollapsed ? 76 : 248,
-                        child: _buildSidebar(
-                          dashboardController,
-                          isCollapsed: isCollapsed,
-                          isMobile: false,
-                        ),
-                      ),
-                      Expanded(
-                        child: Column(
-                          children: [
-                            _buildDesktopAppBar(dashboardController),
-                            const Expanded(child: _TindakanContent()),
-                          ],
-                        ),
-                      ),
-                    ],
-                  );
-                }),
-        );
-      },
-    );
-  }
-
-  Widget _buildContent() => const _TindakanContent();
-
-  Widget _buildDesktopAppBar(DashboardController dashboardController) {
-    return Container(
-      height: 68,
-      padding: const EdgeInsets.symmetric(horizontal: 28),
-      decoration: const BoxDecoration(
-        color: AppColors.white,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
-      ),
-      child: Row(
-        children: [
-          Obx(
-            () => IconButton(
-              tooltip: dashboardController.isSidebarCollapsed.value
-                  ? 'Buka sidebar'
-                  : 'Ciutkan sidebar',
-              onPressed: dashboardController.isSidebarCollapsed.toggle,
-              icon: const Icon(Icons.menu_rounded, color: AppColors.textStrong),
-            ),
-          ),
-          const SizedBox(width: 12),
-          const Text(
-            'Tindakan',
-            style: TextStyle(
-              color: AppColors.textStrong,
-              fontSize: 17,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const Spacer(),
-          TextButton.icon(
-            onPressed: dashboardController.logout,
-            icon: const Icon(Icons.logout_outlined, size: 18),
-            label: const Text('Keluar'),
-            style: TextButton.styleFrom(foregroundColor: AppColors.textWeak),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSidebar(
-    DashboardController dashboardController, {
-    required bool isCollapsed,
-    required bool isMobile,
-  }) {
-    return Obx(
-      () => SidebarWidget(
-        isCollapsed: isCollapsed,
-        isMobile: isMobile,
-        currentRoute: Routes.TINDAKAN,
-        unitName: dashboardController.unitName.value,
-        employeeName: dashboardController.employeeName.value,
-        isMasterExpanded: dashboardController.isMasterExpanded.value,
-        onMasterMenuTap: () {
-          if (isCollapsed) {
-            dashboardController.isSidebarCollapsed.value = false;
-            dashboardController.isMasterExpanded.value = true;
-          } else {
-            dashboardController.isMasterExpanded.toggle();
-          }
-        },
-      ),
-    );
+    return MainLayoutWidget(title: 'Tindakan', child: const _TindakanContent());
   }
 }
 
@@ -323,9 +205,7 @@ class _TindakanContent extends GetView<TindakanController> {
                   onPressed: _addActionItem,
                   icon: const Icon(Icons.add, size: 18),
                   label: const Text('Tambah'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.primary,
-                  ),
+                  style: AppButtons.outlined,
                 ),
               ],
             ),
@@ -417,8 +297,10 @@ class _TindakanContent extends GetView<TindakanController> {
               alignment: WrapAlignment.spaceBetween,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     const Text(
                       'Status',
@@ -427,7 +309,6 @@ class _TindakanContent extends GetView<TindakanController> {
                         fontSize: 13,
                       ),
                     ),
-                    const SizedBox(width: 10),
                     Obx(
                       () => DropdownButton<String>(
                         value: controller.selectedStatus.value,
@@ -450,10 +331,7 @@ class _TindakanContent extends GetView<TindakanController> {
                 ),
                 ElevatedButton(
                   onPressed: _saveAction,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: AppColors.white,
-                  ),
+                  style: AppButtons.primary,
                   child: const Text('Kirim Tindakan'),
                 ),
               ],
@@ -508,17 +386,36 @@ class _ReportList extends GetView<TindakanController> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Daftar Tindakan',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: AppColors.textStrong,
-          ),
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Daftar Tindakan',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textStrong,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Obx(
+              () => FilterMenuButton(
+                value: controller.listFilter.value,
+                entries: reportFilterEntries(includeDone: false),
+                onSelected: (value) => controller.listFilter.value = value,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 12),
         Obx(() {
-          final reports = controller.reportsForCurrentUser;
+          final reports = controller.reportsForCurrentUser
+              .where(
+                (report) =>
+                    matchesReportFilter(report, controller.listFilter.value),
+              )
+              .toList();
           if (reports.isEmpty) {
             return Container(
               width: double.infinity,

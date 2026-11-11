@@ -63,6 +63,32 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('sidebar account menu shows the user profile', (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(Get.reset);
+    SharedPreferences.setMockInitialValues({
+      'nama_karyawan': 'Siti Permata',
+      'unit_name': 'UNIT-IGD',
+    });
+
+    await tester.pumpWidget(
+      GetMaterialApp(initialRoute: Routes.DASHBOARD, getPages: AppPages.routes),
+    );
+    await tester.pump(const Duration(seconds: 2));
+    await tester.tap(find.byTooltip('Menu akun'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Lihat profil'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Profil pengguna'), findsOneWidget);
+    expect(find.text('Siti Permata'), findsWidgets);
+    expect(find.text('UNIT-IGD'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('dashboard sidebar opens the reports page', (tester) async {
     tester.view.physicalSize = const Size(1024, 800);
     tester.view.devicePixelRatio = 1;

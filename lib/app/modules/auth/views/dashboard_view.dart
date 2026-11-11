@@ -3,144 +3,25 @@ import 'package:get/get.dart';
 
 import '../controllers/dashboard_controller.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/utils/responsive_layout.dart';
-import '../../../global_widgets/sidebar_widgets.dart';
-import '../../../routes/app_pages.dart';
+import '../../../global_widgets/filter_menu_button.dart';
+import '../../../global_widgets/main_layout_widget.dart';
 
 class DashboardView extends GetView<DashboardController> {
   const DashboardView({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isMobile = constraints.maxWidth < 800;
-        return Scaffold(
-          backgroundColor: AppColors.surface,
-          appBar: isMobile
-              ? SidebarWidget.mobileAppBar(
-                  title: 'Dashboard',
-                  actions: [
-                    IconButton(
-                      tooltip: 'Keluar',
-                      onPressed: controller.logout,
-                      icon: const Icon(Icons.logout_outlined),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                )
-              : null,
-          drawer: isMobile
-              ? SidebarWidget.mobileDrawer(
-                  child: _buildSidebar(isCollapsed: false, isMobile: true),
-                )
-              : null,
-          body: isMobile ? _buildMobileLayout() : _buildDesktopLayout(),
-        );
-      },
-    );
-  }
-
-  Widget _buildMobileLayout() {
-    return _buildContent();
-  }
-
-  Widget _buildDesktopLayout() {
-    return Obx(() {
-      final isCollapsed = controller.isSidebarCollapsed.value;
-      return Row(
-        children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeInOut,
-            width: isCollapsed ? 76 : 248,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final sidebarIsCollapsed = constraints.maxWidth < 100;
-                return _buildSidebar(
-                  isCollapsed: sidebarIsCollapsed,
-                  isMobile: false,
-                );
-              },
-            ),
-          ),
-          Expanded(
-            child: Column(
-              children: [
-                _buildDesktopAppBar(),
-                Expanded(child: _buildContent()),
-              ],
-            ),
-          ),
-        ],
-      );
-    });
-  }
-
-  Widget _buildDesktopAppBar() {
-    return Container(
-      height: 68,
-      padding: const EdgeInsets.symmetric(horizontal: 28),
-      decoration: const BoxDecoration(
-        color: AppColors.white,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            tooltip: controller.isSidebarCollapsed.value
-                ? 'Buka sidebar'
-                : 'Ciutkan sidebar',
-            onPressed: () {
-              controller.isSidebarCollapsed.toggle();
-            },
-            icon: const Icon(Icons.menu_rounded, color: AppColors.textStrong),
-          ),
-          const SizedBox(width: 12),
-          const Text(
-            'Dashboard',
-            style: TextStyle(
-              color: AppColors.textStrong,
-              fontSize: 17,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const Spacer(),
-          IconButton(
-            tooltip: 'Muat ulang data',
-            onPressed: controller.fetchDashboardData,
-            icon: const Icon(Icons.refresh_rounded, color: AppColors.textWeak),
-          ),
-          const SizedBox(width: 8),
-          TextButton.icon(
-            onPressed: controller.logout,
-            icon: const Icon(Icons.logout_outlined, size: 18),
-            label: const Text('Keluar'),
-            style: TextButton.styleFrom(foregroundColor: AppColors.textWeak),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSidebar({required bool isCollapsed, required bool isMobile}) {
-    return Obx(
-      () => SidebarWidget(
-        isCollapsed: isCollapsed,
-        isMobile: isMobile,
-        currentRoute: Routes.DASHBOARD,
-        unitName: controller.unitName.value,
-        employeeName: controller.employeeName.value,
-        isMasterExpanded: controller.isMasterExpanded.value,
-        onMasterMenuTap: () {
-          if (isCollapsed) {
-            controller.isSidebarCollapsed.value = false;
-            controller.isMasterExpanded.value = true;
-          } else {
-            controller.isMasterExpanded.toggle();
-          }
-        },
-      ),
+    return MainLayoutWidget(
+      title: 'Dashboard',
+      desktopActions: [
+        IconButton(
+          tooltip: 'Muat ulang data',
+          onPressed: controller.fetchDashboardData,
+          icon: const Icon(Icons.refresh_rounded, color: AppColors.textWeak),
+        ),
+        const SizedBox(width: 8),
+      ],
+      child: _buildContent(),
     );
   }
 
@@ -171,141 +52,148 @@ class DashboardView extends GetView<DashboardController> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-              Obx(
-                () => Text(
-                  'Selamat datang, ${controller.unitName.value}',
-                  style: const TextStyle(
-                    color: AppColors.textStrong,
-                    fontSize: 23,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.3,
+                Obx(
+                  () => Text(
+                    'Selamat datang, ${controller.unitName.value}',
+                    style: const TextStyle(
+                      color: AppColors.textStrong,
+                      fontSize: 23,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.3,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'Berikut ringkasan laporan dan tindak lanjut unit Anda.',
-                style: TextStyle(color: AppColors.textWeak, fontSize: 13),
-              ),
-              const SizedBox(height: 24),
-              Wrap(
-                spacing: 16,
-                runSpacing: 16,
-                children: [
-                  SizedBox(
-                    width: cardWidth,
-                    child: Obx(
-                      () => _buildMetricCard(
-                        'Laporan Terkirim',
-                        controller.jumlahLaporan.value.toString(),
-                        AppColors.primary,
+                const SizedBox(height: 6),
+                const Text(
+                  'Berikut ringkasan laporan dan tindak lanjut unit Anda.',
+                  style: TextStyle(color: AppColors.textWeak, fontSize: 13),
+                ),
+                const SizedBox(height: 24),
+                Wrap(
+                  spacing: 16,
+                  runSpacing: 16,
+                  children: [
+                    SizedBox(
+                      width: cardWidth,
+                      child: Obx(
+                        () => _buildMetricCard(
+                          'Laporan Terkirim',
+                          controller.jumlahLaporan.value.toString(),
+                          AppColors.primary,
+                        ),
                       ),
                     ),
-                  ),
-                  SizedBox(
-                    width: cardWidth,
-                    child: Obx(
-                      () => _buildMetricCard(
-                        'Pesan Tindakan',
-                        controller.jumlahPesanTindakan.value.toString(),
-                        AppColors.warning,
+                    SizedBox(
+                      width: cardWidth,
+                      child: Obx(
+                        () => _buildMetricCard(
+                          'Pesan Tindakan',
+                          controller.jumlahPesanTindakan.value.toString(),
+                          AppColors.warning,
+                        ),
                       ),
                     ),
-                  ),
-                  SizedBox(
-                    width: cardWidth,
-                    child: Obx(
-                      () => _buildMetricCard(
-                        'Tindakan Selesai',
-                        controller.jumlahTindakanSelesai.value.toString(),
-                        AppColors.success,
+                    SizedBox(
+                      width: cardWidth,
+                      child: Obx(
+                        () => _buildMetricCard(
+                          'Tindakan Selesai',
+                          controller.jumlahTindakanSelesai.value.toString(),
+                          AppColors.success,
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 32),
-              Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'Prioritas tindak lanjut',
-                      style: TextStyle(
-                        color: AppColors.textStrong,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w600,
+                  ],
+                ),
+                const SizedBox(height: 32),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Prioritas tindak lanjut',
+                        style: TextStyle(
+                          color: AppColors.textStrong,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                  ),
-                  if (ResponsiveLayout.isMobile(context))
-                    IconButton(
-                      tooltip: 'Muat ulang data',
-                      onPressed: controller.fetchDashboardData,
-                      icon: const Icon(
-                        Icons.refresh_rounded,
-                        color: AppColors.textWeak,
+                    const SizedBox(width: 8),
+                    Obx(
+                      () => FilterMenuButton(
+                        value: controller.priorityFilter.value,
+                        entries: reportFilterEntries(),
+                        onSelected: (value) =>
+                            controller.priorityFilter.value = value,
                       ),
                     ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Obx(() {
-                final priorityReports = controller.listLaporan.toList()
-                  ..sort((first, second) {
-                    int priority(Map<String, dynamic> laporan) {
-                      return switch (laporan['prioritas']
-                          ?.toString()
-                          .toLowerCase()) {
-                        'high' => 0,
-                        'mid' => 1,
-                        'low' => 2,
-                        _ => 3,
-                      };
-                    }
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Obx(() {
+                  final priorityReports = controller.listLaporan
+                      .where(
+                        (laporan) => matchesReportFilter(
+                          laporan,
+                          controller.priorityFilter.value,
+                        ),
+                      )
+                      .toList()
+                    ..sort((first, second) {
+                      int priority(Map<String, dynamic> laporan) {
+                        return switch (laporan['prioritas']
+                            ?.toString()
+                            .toLowerCase()) {
+                          'high' => 0,
+                          'mid' => 1,
+                          'low' => 2,
+                          _ => 3,
+                        };
+                      }
 
-                    final priorityOrder = priority(first)
-                        .compareTo(priority(second));
-                    if (priorityOrder != 0) {
-                      return priorityOrder;
-                    }
+                      final priorityOrder = priority(first)
+                          .compareTo(priority(second));
+                      if (priorityOrder != 0) {
+                        return priorityOrder;
+                      }
 
-                    int statusOrder(Map<String, dynamic> laporan) {
-                      return switch (laporan['status']
-                          ?.toString()
-                          .toLowerCase()) {
-                        'open' => 0,
-                        'on progress' => 1,
-                        'done' => 2,
-                        _ => 3,
-                      };
-                    }
+                      int statusOrder(Map<String, dynamic> laporan) {
+                        return switch (laporan['status']
+                            ?.toString()
+                            .toLowerCase()) {
+                          'open' => 0,
+                          'on progress' => 1,
+                          'done' => 2,
+                          _ => 3,
+                        };
+                      }
 
-                    return statusOrder(first).compareTo(statusOrder(second));
-                  });
+                      return statusOrder(first).compareTo(statusOrder(second));
+                    });
 
-                if (controller.isLoading.value &&
-                    controller.listLaporan.isEmpty) {
-                  return const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(32),
-                      child: CircularProgressIndicator(
-                        color: AppColors.primary,
-                        strokeWidth: 2.5,
+                  if (controller.isLoading.value &&
+                      controller.listLaporan.isEmpty) {
+                    return const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(32),
+                        child: CircularProgressIndicator(
+                          color: AppColors.primary,
+                          strokeWidth: 2.5,
+                        ),
                       ),
-                    ),
+                    );
+                  }
+
+                  if (priorityReports.isEmpty) {
+                    return _buildEmptyState();
+                  }
+
+                  return Column(
+                    children: priorityReports
+                        .map((laporan) => _buildReportCard(laporan))
+                        .toList(),
                   );
-                }
-
-                if (priorityReports.isEmpty) {
-                  return _buildEmptyState();
-                }
-
-                return Column(
-                  children: priorityReports
-                      .map((laporan) => _buildReportCard(laporan))
-                      .toList(),
-                );
-              }),
+                }),
               ],
             ),
           );
