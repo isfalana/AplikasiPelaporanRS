@@ -5,6 +5,7 @@ import '../controllers/tindakan_controller.dart';
 import '../../../core/theme/app_buttons.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../global_widgets/filter_menu_button.dart';
+import '../../../global_widgets/image_upload_field.dart';
 import '../../../global_widgets/main_layout_widget.dart';
 
 class TindakanView extends GetView<TindakanController> {
@@ -88,13 +89,7 @@ class _TindakanContent extends GetView<TindakanController> {
         ('Deadline', _value(report, 'deadline')),
         ('ID tindak lanjut', _value(report, 'id_tindak_lanjut')),
         ('Perihal', _value(report, 'perihal')),
-        (
-          'Pelapor',
-          [
-            _value(report, 'id_nik_pelapor', 'nik_pelapor'),
-            _value(report, 'id_unit_pelapor', 'unit_pelapor'),
-          ].where((value) => value != '-').join(' - '),
-        ),
+        ('Pelapor', controller.reporterLabel(report)),
         ('Kategori', _value(report, 'id_kategori', 'kategori')),
         (
           'PIC',
@@ -290,6 +285,16 @@ class _TindakanContent extends GetView<TindakanController> {
                 hint: 'Tuliskan keterangan tindak lanjut...',
               ),
             ),
+            const SizedBox(height: 14),
+            ImageUploadField(
+              label: 'Upload bukti tindak lanjut',
+              fileName: controller.buktiTindakanName.value,
+              bytes: controller.buktiTindakanBytes.value,
+              onChanged: (name, bytes) {
+                controller.buktiTindakanName.value = name;
+                controller.buktiTindakanBytes.value = bytes;
+              },
+            ),
             const SizedBox(height: 16),
             Wrap(
               spacing: 12,
@@ -400,10 +405,14 @@ class _ReportList extends GetView<TindakanController> {
             ),
             const SizedBox(width: 8),
             Obx(
-              () => FilterMenuButton(
-                value: controller.listFilter.value,
+              () => MultiFilterMenuButton(
+                selectedValues: controller.listFilters.toSet(),
                 entries: reportFilterEntries(includeDone: false),
-                onSelected: (value) => controller.listFilter.value = value,
+                onSelected: (values) {
+                  controller.listFilters
+                    ..clear()
+                    ..addAll(values);
+                },
               ),
             ),
           ],
@@ -412,8 +421,10 @@ class _ReportList extends GetView<TindakanController> {
         Obx(() {
           final reports = controller.reportsForCurrentUser
               .where(
-                (report) =>
-                    matchesReportFilter(report, controller.listFilter.value),
+                (report) => matchesReportFilters(
+                  report,
+                  controller.listFilters.toSet(),
+                ),
               )
               .toList();
           if (reports.isEmpty) {
@@ -437,6 +448,7 @@ class _ReportList extends GetView<TindakanController> {
                     padding: const EdgeInsets.only(bottom: 14),
                     child: _ReportCard(
                       report: report,
+                      reporter: controller.reporterLabel(report),
                       onTap: () => controller.selectReport(report),
                     ),
                   ),
@@ -450,9 +462,14 @@ class _ReportList extends GetView<TindakanController> {
 }
 
 class _ReportCard extends StatelessWidget {
-  const _ReportCard({required this.report, required this.onTap});
+  const _ReportCard({
+    required this.report,
+    required this.reporter,
+    required this.onTap,
+  });
 
   final Map<String, dynamic> report;
+  final String reporter;
   final VoidCallback onTap;
 
   @override
@@ -531,8 +548,7 @@ class _ReportCard extends StatelessWidget {
                   _ReportCardInfo(
                     icon: Icons.person_outline,
                     label: 'Pelapor',
-                    value:
-                        '${report['id_nik_pelapor'] ?? '-'} - ${report['id_unit_pelapor'] ?? '-'}',
+                    value: reporter,
                   ),
                   _ReportCardInfo(
                     icon: Icons.history_outlined,

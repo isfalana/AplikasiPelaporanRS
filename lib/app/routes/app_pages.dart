@@ -9,6 +9,10 @@ import 'package:get/get.dart';
 
 import '../modules/report/bindings/report_binding.dart';
 import '../modules/report/views/report_view.dart';
+import '../modules/master/bindings/master_unit_binding.dart';
+import '../modules/master/views/master_unit_view.dart';
+import '../modules/master/bindings/master_karyawan_binding.dart';
+import '../modules/master/views/master_karyawan_view.dart';
 // Import nanti jika module sudah dibuat
 import '../modules/auth/bindings/auth_binding.dart';
 import '../modules/auth/views/login_view.dart';
@@ -54,6 +58,18 @@ class AppPages {
       name: Routes.REPORT,
       page: () => const ReportView(),
       binding: ReportBinding(),
+      transition: Transition.noTransition,
+    ),
+    GetPage(
+      name: Routes.MASTER_UNIT,
+      page: () => const MasterUnitView(),
+      binding: MasterUnitBinding(),
+      transition: Transition.noTransition,
+    ),
+    GetPage(
+      name: Routes.MASTER_KARYAWAN,
+      page: () => const MasterKaryawanView(),
+      binding: MasterKaryawanBinding(),
       transition: Transition.noTransition,
     ),
   ];

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,6 +8,7 @@ import '../controllers/laporan_controller.dart';
 import '../../../core/theme/app_buttons.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../global_widgets/filter_menu_button.dart';
+import '../../../global_widgets/image_upload_field.dart';
 import '../../../global_widgets/main_layout_widget.dart';
 
 class LaporanView extends GetView<LaporanController> {
@@ -36,15 +39,17 @@ class _LaporanContentState extends State<_LaporanContent> {
   DateTime _tanggalKejadian = DateTime.now();
   DateTime _deadline = DateTime.now().add(const Duration(days: 1));
   String _activeNik = '';
+  String _activeName = '';
   String _activeUnit = '';
   String? _selectedKategori;
   String? _selectedPrioritas;
   final List<String> _selectedPics = [];
+  Uint8List? _buktiBytes;
   Map<String, dynamic>? _editingReport;
   Map<String, dynamic>? _viewingReport;
 
-  // Filter aktif pada card "Daftar Laporan".
-  String _reportFilter = 'all';
+  // Filter aktif pada card "Daftar Laporan". Bisa lebih dari satu.
+  final Set<String> _reportFilters = {};
 
   LaporanController get controller => widget.controller;
 
@@ -60,6 +65,7 @@ class _LaporanContentState extends State<_LaporanContent> {
     if (!mounted) return;
     setState(() {
       _activeNik = preferences.getString('id_nik') ?? '';
+      _activeName = preferences.getString('nama_karyawan') ?? '';
       _activeUnit = preferences.getString('unit_name') ?? '';
     });
   }
@@ -89,6 +95,7 @@ class _LaporanContentState extends State<_LaporanContent> {
       _selectedPics.clear();
       _perihalController.clear();
       _buktiController.clear();
+      _buktiBytes = null;
     }
 
     if (notify) {
@@ -120,6 +127,8 @@ class _LaporanContentState extends State<_LaporanContent> {
         );
       _perihalController.text = report['perihal']?.toString() ?? '';
       _buktiController.text = report['bukti']?.toString() ?? '';
+      final savedBytes = report['bukti_bytes'];
+      _buktiBytes = savedBytes is Uint8List ? savedBytes : null;
     });
   }
 
@@ -193,18 +202,22 @@ class _LaporanContentState extends State<_LaporanContent> {
           _editingReport?['tgl_laporan'] ?? _formatDate(DateTime.now()),
       'tgl_kejadian': _formatDate(_tanggalKejadian),
       'id_nik_pelapor': _activeNik,
+      'nama_pelapor': _pelaporName(_activeName, _activeNik),
+      'id_unit_pelapor': _activeUnit,
+      'nama_unit_pelapor': controller.unitName(_activeUnit),
       'id_kategori': _selectedKategori,
       'id_nik_pic': _selectedPics.join(', '),
       'perihal': title,
       'prioritas': _selectedPrioritas,
       'deadline': _formatDate(_deadline),
       'bukti': _buktiController.text.trim(),
+      'bukti_bytes': _buktiBytes,
       'status': _displayStatus(_editingReport?['status']?.toString()),
       'tgl_selesai': _editingReport?['tgl_selesai'],
     };
 
     if (_editingReport == null) {
-      report.addAll({'id_unit_pelapor': _activeUnit, 'id_tindak_lanjut': null});
+      report['id_tindak_lanjut'] = null;
       report['id_nik_pic'] = _selectedPics.join(', ');
       controller.listLaporan.insert(0, report);
     } else {
@@ -359,10 +372,14 @@ class _LaporanContentState extends State<_LaporanContent> {
               ),
             ),
             const SizedBox(width: 8),
-            FilterMenuButton(
-              value: _reportFilter,
+            MultiFilterMenuButton(
+              selectedValues: _reportFilters,
               entries: reportFilterEntries(),
-              onSelected: (value) => setState(() => _reportFilter = value),
+              onSelected: (values) => setState(() {
+                _reportFilters
+                  ..clear()
+                  ..addAll(values);
+              }),
             ),
           ],
         ),
@@ -382,7 +399,7 @@ class _LaporanContentState extends State<_LaporanContent> {
 
           return Column(
             children: controller.listLaporan
-                .where((report) => matchesReportFilter(report, _reportFilter))
+                .where((report) => matchesReportFilters(report, _reportFilters))
                 .map(
                   (report) => Padding(
                     padding: const EdgeInsets.only(bottom: 14),
@@ -450,10 +467,7 @@ class _LaporanContentState extends State<_LaporanContent> {
                 width: fieldWidth,
                 child: _readOnlyField(
                   'Pelapor',
-                  [
-                    _activeNik,
-                    if (_activeUnit.isNotEmpty) _activeUnit,
-                  ].where((value) => value.isNotEmpty).join(' · '),
+                  _pelaporLabel(_activeName, _activeNik, _activeUnit),
                   Icons.lock_outline,
                 ),
               ),
@@ -490,27 +504,13 @@ class _LaporanContentState extends State<_LaporanContent> {
               ),
               SizedBox(
                 width: fieldWidth,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _fieldLabel('Upload bukti'),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: _buktiController,
-                      decoration: _inputDecoration(
-                        hint: 'Pilih atau masukkan nama file bukti',
-                        suffixIcon: IconButton(
-                          tooltip: 'Lampirkan bukti',
-                          onPressed: () {
-                            setState(() {
-                              _buktiController.text = 'bukti_laporan.jpg';
-                            });
-                          },
-                          icon: const Icon(Icons.attach_file_rounded),
-                        ),
-                      ),
-                    ),
-                  ],
+                child: ImageUploadField(
+                  fileName: _buktiController.text,
+                  bytes: _buktiBytes,
+                  onChanged: (name, bytes) => setState(() {
+                    _buktiController.text = name;
+                    _buktiBytes = bytes;
+                  }),
                 ),
               ),
             ],
@@ -678,6 +678,11 @@ class _LaporanContentState extends State<_LaporanContent> {
                   'Deadline',
                   report['deadline']?.toString() ?? '-',
                 ),
+                _reportCardInfo(
+                  Icons.account_circle_outlined,
+                  'Pelapor',
+                  _pelaporDisplay(report),
+                ),
                 _reportCardInfo(Icons.person_outline, 'PIC', pic),
                 _reportCardInfo(
                   Icons.history_outlined,
@@ -749,6 +754,52 @@ class _LaporanContentState extends State<_LaporanContent> {
     return '$displayName - $employeeUnit';
   }
 
+  /// Nama pelapor berdasarkan NIK. Bila nama tidak tersedia, pakai NIK.
+  String _pelaporName(String name, String nik) {
+    final trimmed = name.trim();
+    return trimmed.isNotEmpty ? trimmed : nik;
+  }
+
+  /// Label pelapor untuk form: "Nama · Unit".
+  String _pelaporLabel(String name, String nik, String unit) {
+    final displayName = _pelaporName(name, nik);
+    final displayUnit = controller.unitName(unit);
+    return [
+      displayName,
+      displayUnit,
+    ].where((value) => value.trim().isNotEmpty).join(' · ');
+  }
+
+  /// Label pelapor pada kartu/detail: "Nama · Unit".
+  String _pelaporDisplay(Map<String, dynamic> report) {
+    final nik = report['id_nik_pelapor']?.toString().trim() ?? '';
+    final name = report['nama_pelapor']?.toString().trim() ?? '';
+    final unit =
+        report['nama_unit_pelapor']?.toString().trim() ??
+        report['id_unit_pelapor']?.toString().trim() ??
+        '';
+    final displayName = name.isNotEmpty ? name : controller.userName(nik);
+    final displayUnit = controller.unitName(unit);
+    final values = [
+      displayName,
+      displayUnit,
+    ].where((value) => value.trim().isNotEmpty).toList();
+    return values.isEmpty ? '-' : values.join(' · ');
+  }
+
+  Widget _buildBuktiPreview(Uint8List bytes) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Image.memory(
+        bytes,
+        height: 180,
+        width: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+      ),
+    );
+  }
+
   Widget _reportCardInfo(IconData icon, String label, String value) {
     return SizedBox(
       width: 190,
@@ -790,8 +841,7 @@ class _LaporanContentState extends State<_LaporanContent> {
   Widget _buildDetail(Map<String, dynamic> report) {
     final details = <(String, String)>[
       ('Tanggal kejadian', report['tgl_kejadian']?.toString() ?? '-'),
-      ('Pelapor', report['id_nik_pelapor']?.toString() ?? '-'),
-      ('Unit pelapor', report['id_unit_pelapor']?.toString() ?? '-'),
+      ('Pelapor', _pelaporDisplay(report)),
       ('Kategori', report['id_kategori']?.toString() ?? '-'),
       ('PIC', _picDisplay(report)),
       ('Prioritas', report['prioritas']?.toString() ?? '-'),
@@ -860,6 +910,10 @@ class _LaporanContentState extends State<_LaporanContent> {
                       )
                       .toList(),
                 ),
+                if (report['bukti_bytes'] case final Uint8List bytes) ...[
+                  const SizedBox(height: 16),
+                  _buildBuktiPreview(bytes),
+                ],
                 const Divider(height: 32),
                 const Text(
                   'Tindak lanjut',

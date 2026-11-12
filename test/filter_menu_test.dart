@@ -28,8 +28,14 @@ void main() {
     await openPage(tester, Routes.DASHBOARD, const Size(1440, 1000));
 
     expect(find.text('Perbaikan IBS & Penambahan Mesin Cuci'), findsOneWidget);
-    expect(find.text('Follow up MOU dengan dr Enung Sp PD EMD'), findsOneWidget);
-    expect(find.text('Buat link untuk progres tindaklanjut IT'), findsOneWidget);
+    expect(
+      find.text('Follow up MOU dengan dr Enung Sp PD EMD'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Buat link untuk progres tindaklanjut IT'),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byTooltip('Filter daftar'));
     await tester.pumpAndSettle();
@@ -45,7 +51,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Semua'));
     await tester.pumpAndSettle();
-    expect(find.text('Follow up MOU dengan dr Enung Sp PD EMD'), findsOneWidget);
+    expect(
+      find.text('Follow up MOU dengan dr Enung Sp PD EMD'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('laporan list can be filtered by status', (tester) async {
@@ -56,7 +65,25 @@ void main() {
 
     await tester.tap(find.byTooltip('Filter daftar'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Status: On Progress'));
+
+    // Filter tampil sebagai bottom sheet dengan pilihan berbentuk chip.
+    expect(
+      find.text('Pilih satu atau lebih prioritas dan status.'),
+      findsOneWidget,
+    );
+    await tester.tap(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('On Progress'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('Terapkan'),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('Permintaan Perbaikan Jaringan LAN'), findsOneWidget);
@@ -72,13 +99,124 @@ void main() {
 
     await tester.tap(find.byTooltip('Filter daftar'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Prioritas: Sedang'));
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('Sedang'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('Terapkan'),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(
       find.text('Belum ada pesan tindakan untuk akun ini.'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('filter bottom sheet can be reset', (tester) async {
+    await openPage(tester, Routes.LAPORAN, const Size(1440, 1000));
+
+    await tester.tap(find.byTooltip('Filter daftar'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('Open'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('Terapkan'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Kerusakan AC Ruang IGD'), findsOneWidget);
+    expect(find.text('Permintaan Perbaikan Jaringan LAN'), findsNothing);
+
+    await tester.tap(find.byTooltip('Filter daftar'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('Reset'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('Terapkan'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Permintaan Perbaikan Jaringan LAN'), findsOneWidget);
+  });
+
+  testWidgets('laporan filter accepts multiple priorities and statuses', (
+    tester,
+  ) async {
+    await openPage(tester, Routes.LAPORAN, const Size(1440, 1000));
+
+    await tester.tap(find.byTooltip('Filter daftar'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('Tinggi'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('Sedang'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('Terapkan'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Dua prioritas dipilih sekaligus: kedua laporan tampil.
+    expect(find.text('Kerusakan AC Ruang IGD'), findsOneWidget);
+    expect(find.text('Permintaan Perbaikan Jaringan LAN'), findsOneWidget);
+
+    // Tambah filter status Open: hanya laporan Open yang tampil.
+    await tester.tap(find.byTooltip('Filter daftar'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('Open'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('Terapkan'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Kerusakan AC Ruang IGD'), findsOneWidget);
+    expect(find.text('Permintaan Perbaikan Jaringan LAN'), findsNothing);
   });
 
   testWidgets('dashboard mobile keeps refresh in the app bar', (tester) async {

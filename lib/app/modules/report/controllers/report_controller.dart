@@ -161,8 +161,25 @@ class ReportController extends GetxController {
   String category(Map<String, dynamic> report) =>
       _value(report, 'id_kategori', 'kategori', 'nama_kategori');
 
-  String reporter(Map<String, dynamic> report) =>
-      _personValue(report, 'id_nik_pelapor', 'id_unit_pelapor');
+  String reporter(Map<String, dynamic> report) {
+    final nik = _value(report, 'id_nik_pelapor', 'nik_pelapor');
+    final storedName = report['nama_pelapor']?.toString().trim() ?? '';
+    final name = storedName.isNotEmpty
+        ? storedName
+        : (nik == '-' ? '-' : laporanController.userName(nik));
+    final unit = _value(
+      report,
+      'nama_unit_pelapor',
+      'id_unit_pelapor',
+      'unit_pelapor',
+    );
+    final unitName = unit == '-' ? '-' : laporanController.unitName(unit);
+    final values = [
+      name,
+      unitName,
+    ].where((value) => value.isNotEmpty && value != '-').toList();
+    return values.isEmpty ? '-' : values.join(' · ');
+  }
 
   String pic(Map<String, dynamic> report) =>
       _personValue(report, 'id_nik_pic', 'id_unit_pic', 'unit_pic');

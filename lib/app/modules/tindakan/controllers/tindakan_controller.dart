@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,8 +20,12 @@ class TindakanController extends GetxController {
   final actionInputController = TextEditingController();
   final noteController = TextEditingController();
 
-  // Filter aktif pada card "Daftar Tindakan".
-  final listFilter = 'all'.obs;
+  // Bukti tindak lanjut yang dipilih (pratinjau lokal, belum diunggah).
+  final buktiTindakanName = ''.obs;
+  final buktiTindakanBytes = Rxn<Uint8List>();
+
+  // Filter aktif pada card "Daftar Tindakan". Bisa lebih dari satu.
+  final listFilters = <String>{}.obs;
 
   final Map<String, List<Map<String, dynamic>>> _detailsByReport = {};
 
@@ -60,6 +66,25 @@ class TindakanController extends GetxController {
         selectReport(selectedReport.value!);
       }
     }
+  }
+
+  /// Label pelapor pada kartu/detail: "Nama · Unit".
+  String reporterLabel(Map<String, dynamic> report) {
+    final nik = report['id_nik_pelapor']?.toString().trim() ?? '';
+    final name = report['nama_pelapor']?.toString().trim() ?? '';
+    final unit =
+        report['nama_unit_pelapor']?.toString().trim() ??
+        report['id_unit_pelapor']?.toString().trim() ??
+        '';
+    final displayName = name.isNotEmpty
+        ? name
+        : laporanController.userName(nik);
+    final displayUnit = laporanController.unitName(unit);
+    final values = [
+      displayName,
+      displayUnit,
+    ].where((value) => value.trim().isNotEmpty).toList();
+    return values.isEmpty ? '-' : values.join(' · ');
   }
 
   bool _isAssignedToCurrentUser(Map<String, dynamic> report) {
@@ -117,6 +142,9 @@ class TindakanController extends GetxController {
     );
     selectedStatus.value = _normalizeStatus(report['status']?.toString());
     noteController.text = report['keterangan_tindakan']?.toString() ?? '';
+    buktiTindakanName.value = report['bukti_tindakan']?.toString() ?? '';
+    final savedBukti = report['bukti_tindakan_bytes'];
+    buktiTindakanBytes.value = savedBukti is Uint8List ? savedBukti : null;
   }
 
   List<Map<String, dynamic>> _detailsFromReport(dynamic value) {
@@ -217,6 +245,8 @@ class TindakanController extends GetxController {
         )
         .toList();
     report['keterangan_tindakan'] = noteController.text.trim();
+    report['bukti_tindakan'] = buktiTindakanName.value.trim();
+    report['bukti_tindakan_bytes'] = buktiTindakanBytes.value;
     report['status'] = selectedStatus.value;
     laporanController.listLaporan.refresh();
     if (selectedStatus.value == 'Done') {
@@ -224,6 +254,8 @@ class TindakanController extends GetxController {
       actionItems.clear();
       actionInputController.clear();
       noteController.clear();
+      buktiTindakanName.value = '';
+      buktiTindakanBytes.value = null;
       selectedStatus.value = 'Open';
     }
     return null;
