@@ -35,30 +35,33 @@ void main() {
       Routes.LAPORAN,
       Routes.TINDAKAN,
       Routes.REPORT,
+      Routes.MASTER_UNIT,
+      Routes.MASTER_KARYAWAN,
     ]) {
-      testWidgets('${route.replaceAll('/', '')} aman di ${size.width}x${size.height}', (
-        tester,
-      ) async {
-        tester.view.physicalSize = size;
-        tester.view.devicePixelRatio = 1;
-        addTearDown(tester.view.resetPhysicalSize);
-        addTearDown(tester.view.resetDevicePixelRatio);
-        addTearDown(Get.reset);
+      testWidgets(
+        '${route.replaceAll('/', '')} aman di ${size.width}x${size.height}',
+        (tester) async {
+          tester.view.physicalSize = size;
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          addTearDown(Get.reset);
 
-        await tester.pumpWidget(
-          GetMaterialApp(initialRoute: route, getPages: AppPages.routes),
-        );
-        await tester.pump(const Duration(seconds: 2));
-        expect(tester.takeException(), isNull);
+          await tester.pumpWidget(
+            GetMaterialApp(initialRoute: route, getPages: AppPages.routes),
+          );
+          await tester.pump(const Duration(seconds: 2));
+          expect(tester.takeException(), isNull);
 
-        // Gulir sampai bawah untuk memicu layout seluruh konten.
-        await tester.drag(
-          find.byType(Scrollable).first,
-          const Offset(0, -3000),
-        );
-        await tester.pumpAndSettle();
-        expect(tester.takeException(), isNull);
-      });
+          // Gulir sampai bawah untuk memicu layout seluruh konten.
+          await tester.drag(
+            find.byType(Scrollable).first,
+            const Offset(0, -3000),
+          );
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+        },
+      );
     }
   }
 }

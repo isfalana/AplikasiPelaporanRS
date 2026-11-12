@@ -413,36 +413,68 @@ class SidebarWidget extends StatelessWidget {
           onTap: onMasterMenuTap,
         ),
         if (isMasterExpanded && !isCollapsed) ...[
-          _buildMasterSubmenu('Data Unit'),
-          _buildMasterSubmenu('Data Pegawai'),
-          _buildMasterSubmenu('Kategori Laporan'),
+          _buildMasterSubmenu(
+            'Master Unit',
+            isSelected: currentRoute == Routes.MASTER_UNIT,
+            onTap: _openMasterUnit,
+          ),
+          _buildMasterSubmenu(
+            'Master Karyawan',
+            isSelected: currentRoute == Routes.MASTER_KARYAWAN,
+            onTap: _openMasterKaryawan,
+          ),
+          _buildMasterSubmenu('Master Kategori'),
+          _buildMasterSubmenu('Master Tindak Lanjut'),
+          _buildMasterSubmenu('Master Role'),
         ],
       ],
     );
   }
 
-  Widget _buildMasterSubmenu(String title) {
-    return Tooltip(
-      message: 'Halaman $title belum tersedia',
-      child: Padding(
-        padding: const EdgeInsets.only(left: 57, right: 12),
-        child: SizedBox(
-          height: 38,
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: AppColors.white.withValues(alpha: 0.52),
-                fontSize: 12,
+  Widget _buildMasterSubmenu(
+    String title, {
+    VoidCallback? onTap,
+    bool isSelected = false,
+  }) {
+    final content = Padding(
+      padding: const EdgeInsets.only(left: 40, right: 12),
+      child: Material(
+        color: isSelected
+            ? AppColors.primary.withValues(alpha: 0.2)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: onTap,
+          child: SizedBox(
+            height: 36,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 17),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: isSelected
+                        ? AppColors.white
+                        : AppColors.white.withValues(alpha: 0.52),
+                    fontSize: 12,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                  ),
+                ),
               ),
             ),
           ),
         ),
       ),
     );
+
+    if (onTap == null) {
+      return Tooltip(message: 'Halaman $title belum tersedia', child: content);
+    }
+    return content;
   }
 
   Widget _buildSidebarItem({
@@ -553,5 +585,25 @@ class SidebarWidget extends StatelessWidget {
 
     if (isMobile) Get.back();
     Get.offNamed(Routes.REPORT);
+  }
+
+  void _openMasterUnit() {
+    if (currentRoute == Routes.MASTER_UNIT) {
+      if (isMobile) Get.back();
+      return;
+    }
+
+    if (isMobile) Get.back();
+    Get.offNamed(Routes.MASTER_UNIT);
+  }
+
+  void _openMasterKaryawan() {
+    if (currentRoute == Routes.MASTER_KARYAWAN) {
+      if (isMobile) Get.back();
+      return;
+    }
+
+    if (isMobile) Get.back();
+    Get.offNamed(Routes.MASTER_KARYAWAN);
   }
 }

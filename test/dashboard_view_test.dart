@@ -1,3 +1,4 @@
+import 'package:aplikasilaporan/app/global_widgets/image_upload_field.dart';
 import 'package:aplikasilaporan/app/modules/auth/controllers/dashboard_controller.dart';
 import 'package:aplikasilaporan/app/modules/auth/views/dashboard_view.dart';
 import 'package:aplikasilaporan/app/routes/app_pages.dart';
@@ -118,14 +119,7 @@ void main() {
             widget.decoration?.hintText == 'Ringkasan perihal kendala...',
       ),
     );
-    final evidenceField = tester.getRect(
-      find.byWidgetPredicate(
-        (widget) =>
-            widget is TextField &&
-            widget.decoration?.hintText ==
-                'Pilih atau masukkan nama file bukti',
-      ),
-    );
+    final evidenceField = tester.getRect(find.byType(ImageUploadField));
     expect(evidenceField.top, lessThan(subjectField.top));
     expect(subjectField.width, greaterThan(evidenceField.width));
 
@@ -133,7 +127,8 @@ void main() {
     await tester.tap(find.text('Kerusakan AC Ruang IGD'));
     await tester.pumpAndSettle();
     expect(find.text('Detail Laporan'), findsOneWidget);
-    expect(find.text('UNIT-IGD'), findsOneWidget);
+    expect(find.textContaining('dr. Enung Sp.PD'), findsWidgets);
+    expect(find.textContaining('Instalasi Gawat Darurat'), findsWidgets);
 
     await tester.ensureVisible(find.text('Kembali ke daftar'));
     await tester.tap(find.text('Kembali ke daftar'));
