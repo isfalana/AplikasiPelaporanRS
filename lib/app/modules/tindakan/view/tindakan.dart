@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../global_widgets/filter_menu_button.dart';
 import '../../../global_widgets/image_upload_field.dart';
 import '../../../global_widgets/main_layout_widget.dart';
+import '../../../global_widgets/report_style_card.dart';
 
 class TindakanView extends GetView<TindakanController> {
   const TindakanView({super.key});
@@ -100,7 +101,6 @@ class _TindakanContent extends GetView<TindakanController> {
         ),
         ('Prioritas', _value(report, 'prioritas')),
         ('Bukti laporan', _value(report, 'bukti', 'file_lampiran')),
-        ('Keterangan laporan', _value(report, 'keterangan')),
       ];
 
       return Container(
@@ -475,101 +475,65 @@ class _ReportCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final status = _statusLabel(report['status']?.toString());
-    final priorityColor = switch (report['prioritas']?.toString()) {
+    final priority = report['prioritas']?.toString().trim();
+    final priorityColor = switch (priority) {
       'Tinggi' => AppColors.error,
       'Sedang' => AppColors.warning,
-      _ => AppColors.success,
+      'Rendah' => AppColors.success,
+      _ => AppColors.textWeak,
     };
-    final color = switch (status) {
-      'Done' => AppColors.success,
-      'On Progress' => AppColors.info,
-      _ => AppColors.warning,
-    };
+    final kategori = report['id_kategori']?.toString().trim();
+    final reportDate =
+        report['tgl_laporan']?.toString() ??
+        report['tanggal_laporan']?.toString() ??
+        '-';
+    final deadline = report['deadline']?.toString().trim();
+    final lastUpdatedBy =
+        report['last_update_by']?.toString() ??
+        report['lastUpdateBy']?.toString() ??
+        report['update_by']?.toString() ??
+        report['updateBy']?.toString() ??
+        '-';
 
-    return Material(
-      color: AppColors.white,
-      surfaceTintColor: AppColors.white,
-      borderRadius: BorderRadius.circular(10),
-      child: InkWell(
-        onTap: onTap,
-        hoverColor: Colors.transparent,
-        focusColor: Colors.transparent,
-        highlightColor: Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: _decoration(),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      report['id_laporan']?.toString() ?? '-',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                  ),
-                  _StatusPill(status: status, color: color),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                report['perihal']?.toString() ?? '-',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textStrong,
-                ),
-              ),
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 20,
-                runSpacing: 14,
-                children: [
-                  _ReportCardInfo(
-                    icon: Icons.calendar_today_outlined,
-                    label: 'Tanggal laporan',
-                    value:
-                        report['tgl_laporan']?.toString() ??
-                        report['tanggal_laporan']?.toString() ??
-                        '-',
-                  ),
-                  _ReportCardInfo(
-                    icon: Icons.event_outlined,
-                    label: 'Deadline',
-                    value: report['deadline']?.toString() ?? '-',
-                  ),
-                  _ReportCardInfo(
-                    icon: Icons.person_outline,
-                    label: 'Pelapor',
-                    value: reporter,
-                  ),
-                  _ReportCardInfo(
-                    icon: Icons.history_outlined,
-                    label: 'Last update by',
-                    value:
-                        report['last_update_by']?.toString() ??
-                        report['lastUpdateBy']?.toString() ??
-                        report['update_by']?.toString() ??
-                        report['updateBy']?.toString() ??
-                        '-',
-                  ),
-                  _PriorityInfo(
-                    value: report['prioritas']?.toString() ?? '-',
-                    color: priorityColor,
-                  ),
-                ],
-              ),
-            ],
+    return ReportStyleCard(
+      reportId: report['id_laporan']?.toString() ?? '-',
+      title: report['perihal']?.toString() ?? '-',
+      status: status,
+      onTap: onTap,
+      metaChips: [
+        if (kategori != null && kategori.isNotEmpty)
+          ReportMetaChip(icon: Icons.folder_outlined, label: kategori),
+        if (priority != null && priority.isNotEmpty && priority != '-')
+          ReportMetaChip(
+            icon: Icons.flag_outlined,
+            label: priority,
+            color: priorityColor,
           ),
+      ],
+      infoItems: [
+        ReportInfoItem(
+          icon: Icons.calendar_today_outlined,
+          label: 'Tanggal laporan',
+          value: reportDate,
         ),
-      ),
+        ReportInfoItem(
+          icon: Icons.event_outlined,
+          label: 'Deadline',
+          value: deadline == null || deadline.isEmpty ? '-' : deadline,
+        ),
+      ],
+      people: [
+        ReportPersonRow(
+          icon: Icons.person_outline,
+          label: 'Pelapor',
+          value: reporter,
+        ),
+        ReportPersonRow(
+          icon: Icons.history_outlined,
+          label: 'Last update by',
+          value: lastUpdatedBy,
+        ),
+      ],
     );
   }
 }
@@ -608,113 +572,6 @@ class _ReadOnlyInfo extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _ReportCardInfo extends StatelessWidget {
-  const _ReportCardInfo({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 190,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 16, color: AppColors.textWeak),
-          const SizedBox(width: 7),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: AppColors.textWeak,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  value.isEmpty ? '-' : value,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.textStrong,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PriorityInfo extends StatelessWidget {
-  const _PriorityInfo({required this.value, required this.color});
-
-  final String value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(Icons.flag_outlined, size: 15, color: color),
-        const SizedBox(width: 5),
-        RichText(
-          text: TextSpan(
-            style: TextStyle(color: color, fontSize: 12),
-            children: [
-              const TextSpan(
-                text: 'Prioritas: ',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              TextSpan(text: value),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.status, required this.color});
-
-  final String status;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        status,
-        style: TextStyle(
-          color: color,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
     );
   }
 }

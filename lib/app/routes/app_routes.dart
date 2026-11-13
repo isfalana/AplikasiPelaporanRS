@@ -9,4 +9,6 @@ abstract class Routes {
   static const REPORT = '/report';
   static const MASTER_UNIT = '/master-unit';
   static const MASTER_KARYAWAN = '/master-karyawan';
+  static const MASTER_KATEGORI = '/master-kategori';
+  static const MASTER_ROLE = '/master-role';
 }

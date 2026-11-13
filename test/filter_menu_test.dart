@@ -27,34 +27,47 @@ void main() {
   testWidgets('dashboard prioritas card can be filtered', (tester) async {
     await openPage(tester, Routes.DASHBOARD, const Size(1440, 1000));
 
-    expect(find.text('Perbaikan IBS & Penambahan Mesin Cuci'), findsOneWidget);
-    expect(
-      find.text('Follow up MOU dengan dr Enung Sp PD EMD'),
-      findsOneWidget,
-    );
-    expect(
-      find.text('Buat link untuk progres tindaklanjut IT'),
-      findsOneWidget,
-    );
+    expect(find.text('Kerusakan AC Ruang IGD'), findsOneWidget);
+    expect(find.text('Permintaan Perbaikan Jaringan LAN'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Filter daftar'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Prioritas: Tinggi'));
+    await tester.tap(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('Tinggi'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('Terapkan'),
+      ),
+    );
     await tester.pumpAndSettle();
 
-    expect(find.text('Perbaikan IBS & Penambahan Mesin Cuci'), findsOneWidget);
-    expect(find.text('Follow up MOU dengan dr Enung Sp PD EMD'), findsNothing);
-    expect(find.text('Buat link untuk progres tindaklanjut IT'), findsNothing);
+    expect(find.text('Kerusakan AC Ruang IGD'), findsOneWidget);
+    expect(find.text('Permintaan Perbaikan Jaringan LAN'), findsNothing);
 
     // Kembali ke semua data.
     await tester.tap(find.byTooltip('Filter daftar'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Semua'));
-    await tester.pumpAndSettle();
-    expect(
-      find.text('Follow up MOU dengan dr Enung Sp PD EMD'),
-      findsOneWidget,
+    await tester.tap(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('Semua'),
+      ),
     );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('Terapkan'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Permintaan Perbaikan Jaringan LAN'), findsOneWidget);
   });
 
   testWidgets('laporan list can be filtered by status', (tester) async {

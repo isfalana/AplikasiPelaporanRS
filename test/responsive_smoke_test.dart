@@ -37,6 +37,8 @@ void main() {
       Routes.REPORT,
       Routes.MASTER_UNIT,
       Routes.MASTER_KARYAWAN,
+      Routes.MASTER_KATEGORI,
+      Routes.MASTER_ROLE,
     ]) {
       testWidgets(
         '${route.replaceAll('/', '')} aman di ${size.width}x${size.height}',

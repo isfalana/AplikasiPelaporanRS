@@ -10,6 +10,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../global_widgets/filter_menu_button.dart';
 import '../../../global_widgets/image_upload_field.dart';
 import '../../../global_widgets/main_layout_widget.dart';
+import '../../../global_widgets/report_style_card.dart';
 
 class LaporanView extends GetView<LaporanController> {
   const LaporanView({super.key});
@@ -400,15 +401,7 @@ class _LaporanContentState extends State<_LaporanContent> {
           return Column(
             children: controller.listLaporan
                 .where((report) => matchesReportFilters(report, _reportFilters))
-                .map(
-                  (report) => Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: _buildReportCard(report),
-                    ),
-                  ),
-                )
+                .map(_buildReportCard)
                 .toList(),
           );
         }),
@@ -596,10 +589,12 @@ class _LaporanContentState extends State<_LaporanContent> {
 
   Widget _buildReportCard(Map<String, dynamic> report) {
     final status = _displayStatus(report['status']?.toString());
-    final priorityColor = switch (report['prioritas']?.toString()) {
+    final priority = report['prioritas']?.toString().trim();
+    final priorityColor = switch (priority) {
       'Tinggi' => AppColors.error,
       'Sedang' => AppColors.warning,
-      _ => AppColors.success,
+      'Rendah' => AppColors.success,
+      _ => AppColors.textWeak,
     };
     final reportDate =
         report['tgl_laporan']?.toString() ??
@@ -612,93 +607,100 @@ class _LaporanContentState extends State<_LaporanContent> {
         report['update_by']?.toString() ??
         report['updateBy']?.toString() ??
         '-';
+    final kategori = report['id_kategori']?.toString().trim();
+    final deadline = report['deadline']?.toString().trim();
 
-    return InkWell(
-      borderRadius: BorderRadius.circular(10),
+    return ReportStyleCard(
+      reportId: report['id_laporan']?.toString() ?? '-',
+      title: report['perihal']?.toString() ?? '-',
+      status: status,
       onTap: () => setState(() => _viewingReport = report),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: _cardDecoration(),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    report['id_laporan']?.toString() ?? '-',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Edit laporan',
-                  onPressed: () => _loadForEdit(report),
-                  icon: const Icon(
-                    Icons.edit_outlined,
-                    size: 17,
-                    color: AppColors.primary,
-                  ),
-                  visualDensity: VisualDensity.compact,
-                ),
-                _statusPill(status),
-                PopupMenuButton<String>(
-                  tooltip: 'Aksi laporan',
-                  onSelected: (_) => _confirmDelete(report),
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(value: 'delete', child: Text('Hapus')),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              report['perihal']?.toString() ?? '-',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textStrong,
-              ),
-            ),
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 20,
-              runSpacing: 14,
-              children: [
-                _reportCardInfo(
-                  Icons.calendar_today_outlined,
-                  'Tanggal laporan',
-                  reportDate,
-                ),
-                _reportCardInfo(
-                  Icons.event_outlined,
-                  'Deadline',
-                  report['deadline']?.toString() ?? '-',
-                ),
-                _reportCardInfo(
-                  Icons.account_circle_outlined,
-                  'Pelapor',
-                  _pelaporDisplay(report),
-                ),
-                _reportCardInfo(Icons.person_outline, 'PIC', pic),
-                _reportCardInfo(
-                  Icons.history_outlined,
-                  'Last update by',
-                  lastUpdatedBy,
-                ),
-                _infoTag(
-                  Icons.flag_outlined,
-                  'Prioritas',
-                  report['prioritas']?.toString() ?? '-',
-                  priorityColor,
-                ),
-              ],
-            ),
+      metaChips: [
+        if (kategori != null && kategori.isNotEmpty)
+          ReportMetaChip(icon: Icons.folder_outlined, label: kategori),
+        if (priority != null && priority.isNotEmpty && priority != '-')
+          ReportMetaChip(
+            icon: Icons.flag_outlined,
+            label: priority,
+            color: priorityColor,
+          ),
+      ],
+      infoItems: [
+        ReportInfoItem(
+          icon: Icons.calendar_today_outlined,
+          label: 'Tanggal laporan',
+          value: reportDate,
+        ),
+        ReportInfoItem(
+          icon: Icons.event_outlined,
+          label: 'Deadline',
+          value: deadline == null || deadline.isEmpty ? '-' : deadline,
+        ),
+        ReportInfoItem(
+          icon: Icons.history_outlined,
+          label: 'Last update by',
+          value: lastUpdatedBy,
+        ),
+      ],
+      people: [
+        ReportPersonRow(
+          icon: Icons.account_circle_outlined,
+          label: 'Pelapor',
+          value: _pelaporDisplay(report),
+        ),
+        ReportPersonRow(
+          icon: Icons.assignment_ind_outlined,
+          label: 'PIC',
+          value: pic,
+        ),
+      ],
+      actions: [
+        _cardActionButton(
+          tooltip: 'Edit laporan',
+          onPressed: () => _loadForEdit(report),
+          icon: const Icon(
+            Icons.edit_outlined,
+            size: 17,
+            color: AppColors.primary,
+          ),
+        ),
+        PopupMenuButton<String>(
+          tooltip: 'Aksi laporan',
+          padding: EdgeInsets.zero,
+          iconSize: 18,
+          splashRadius: 16,
+          style: IconButton.styleFrom(
+            minimumSize: const Size(30, 30),
+            maximumSize: const Size(30, 30),
+            padding: EdgeInsets.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          onSelected: (_) => _confirmDelete(report),
+          itemBuilder: (context) => const [
+            PopupMenuItem(value: 'delete', child: Text('Hapus')),
           ],
         ),
+      ],
+    );
+  }
+
+  /// Tombol aksi kecil agar area edit/hapus tidak memakan tinggi kartu.
+  Widget _cardActionButton({
+    required String tooltip,
+    required VoidCallback onPressed,
+    required Widget icon,
+  }) {
+    return SizedBox(
+      width: 30,
+      height: 30,
+      child: IconButton(
+        tooltip: tooltip,
+        onPressed: onPressed,
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints.tightFor(width: 30, height: 30),
+        visualDensity: VisualDensity.compact,
+        splashRadius: 15,
+        icon: icon,
       ),
     );
   }
@@ -796,44 +798,6 @@ class _LaporanContentState extends State<_LaporanContent> {
         width: double.infinity,
         fit: BoxFit.cover,
         errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
-      ),
-    );
-  }
-
-  Widget _reportCardInfo(IconData icon, String label, String value) {
-    return SizedBox(
-      width: 190,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 16, color: AppColors.textWeak),
-          const SizedBox(width: 7),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: AppColors.textWeak,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  value.isEmpty ? '-' : value,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.textStrong,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1160,28 +1124,6 @@ class _LaporanContentState extends State<_LaporanContent> {
           fontWeight: FontWeight.w600,
         ),
       ),
-    );
-  }
-
-  Widget _infoTag(IconData icon, String label, String value, Color color) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 15, color: color),
-        const SizedBox(width: 5),
-        RichText(
-          text: TextSpan(
-            style: TextStyle(color: color, fontSize: 12),
-            children: [
-              TextSpan(
-                text: '$label: ',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              TextSpan(text: value),
-            ],
-          ),
-        ),
-      ],
     );
   }
 
