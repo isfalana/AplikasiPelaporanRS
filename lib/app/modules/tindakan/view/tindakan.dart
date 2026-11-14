@@ -150,40 +150,162 @@ class _TindakanContent extends GetView<TindakanController> {
               ),
             ),
             const SizedBox(height: 8),
+            const Text(
+              'Pilih template untuk mengisi daftar tindak lanjut secara '
+              'otomatis, atau tulis langkah sendiri pada kolom di bawah.',
+              style: TextStyle(fontSize: 12, color: AppColors.textWeak),
+            ),
+            const SizedBox(height: 8),
             Obx(() {
               final templates = controller.actionTemplates;
-              if (templates.isEmpty) return const SizedBox.shrink();
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: DropdownButtonFormField<String>(
-                  decoration: _inputDecoration(
-                    hint: 'Pilih template tindak lanjut',
+              if (controller.isLoadingTemplates.value && templates.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 6),
+                  child: Text(
+                    'Memuat template tindakan...',
+                    style: TextStyle(fontSize: 12, color: AppColors.textWeak),
                   ),
-                  items: templates
-                      .map(
-                        (template) => DropdownMenuItem<String>(
-                          value: template['id_template']?.toString(),
+                );
+              }
+              if (templates.isEmpty) return const SizedBox.shrink();
+
+              final selectedId = controller.selectedTemplateId.value;
+              Map<String, dynamic>? selected;
+              for (final template in templates) {
+                if (template['id_template']?.toString() == selectedId) {
+                  selected = template;
+                  break;
+                }
+              }
+              final stepCount = selected == null
+                  ? 0
+                  : (selected['list_tindakan'] is List
+                        ? (selected['list_tindakan'] as List).length
+                        : 0);
+
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.divider),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.design_services_outlined,
+                          size: 15,
+                          color: AppColors.primary,
+                        ),
+                        const SizedBox(width: 6),
+                        const Expanded(
                           child: Text(
-                            template['nama_template']?.toString() ??
-                                template['id_template']?.toString() ??
-                                '-',
+                            'Template Tindakan',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textStrong,
+                            ),
                           ),
                         ),
-                      )
-                      .where((item) => item.value != null)
-                      .toList(),
-                  onChanged: (templateId) {
-                    if (templateId == null) return;
-                    for (final template in templates) {
-                      if (template['id_template']?.toString() == templateId) {
-                        controller.applyTemplate(template);
-                        break;
-                      }
-                    }
-                  },
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Text(
+                            'Opsional',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            key: ValueKey('template-$selectedId'),
+                            initialValue: selectedId,
+                            isExpanded: true,
+                            decoration: _inputDecoration(
+                              hint: 'Pilih template tindak lanjut',
+                            ),
+                            items: templates
+                                .map(
+                                  (template) => DropdownMenuItem<String>(
+                                    value: template['id_template']?.toString(),
+                                    child: Text(
+                                      _templateLabel(template),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                )
+                                .where((item) => item.value != null)
+                                .toList(),
+                            onChanged: (value) {
+                              controller.selectedTemplateId.value = value;
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: selectedId == null ? null : _applyTemplate,
+                          style: AppButtons.primary,
+                          child: const Text('Terapkan'),
+                        ),
+                      ],
+                    ),
+                    if (selected != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        '$stepCount langkah pada template ini akan ditambahkan '
+                        'ke daftar. Anda tetap bisa menambah, mengubah, atau '
+                        'menghapusnya.',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textWeak,
+                        ),
+                      ),
+                    ],
+                    if (controller.usingDemoTemplates.value) ...[
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Server belum terhubung, template contoh ditampilkan.',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.warning,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               );
             }),
+            const SizedBox(height: 10),
+            const Text(
+              'Tulis sendiri',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textStrong,
+              ),
+            ),
+            const SizedBox(height: 6),
             Row(
               children: [
                 Expanded(
@@ -364,6 +486,39 @@ class _TindakanContent extends GetView<TindakanController> {
     }
   }
 
+  /// Terapkan template terpilih ke daftar tindak lanjut.
+  void _applyTemplate() {
+    final error = controller.applyTemplateById(
+      controller.selectedTemplateId.value,
+    );
+    if (error == null) {
+      controller.selectedTemplateId.value = null;
+      Get.snackbar(
+        'Berhasil',
+        'Langkah dari template ditambahkan ke daftar tindak lanjut.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: AppColors.primary,
+        colorText: AppColors.white,
+        margin: const EdgeInsets.all(16),
+      );
+      return;
+    }
+    Get.snackbar(
+      'Perhatian',
+      error,
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: AppColors.warning,
+      colorText: AppColors.white,
+      margin: const EdgeInsets.all(16),
+    );
+  }
+
+  String _templateLabel(Map<String, dynamic> template) {
+    final name = template['nama_template']?.toString().trim() ?? '';
+    if (name.isNotEmpty) return name;
+    return template['id_template']?.toString() ?? '-';
+  }
+
   void _saveAction() {
     final error = controller.saveAction();
     Get.snackbar(
@@ -407,7 +562,7 @@ class _ReportList extends GetView<TindakanController> {
             Obx(
               () => MultiFilterMenuButton(
                 selectedValues: controller.listFilters.toSet(),
-                entries: reportFilterEntries(includeDone: false),
+                entries: reportFilterEntries(),
                 onSelected: (values) {
                   controller.listFilters
                     ..clear()

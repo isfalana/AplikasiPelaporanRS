@@ -428,7 +428,12 @@ class SidebarWidget extends StatelessWidget {
             isSelected: currentRoute == Routes.MASTER_KATEGORI,
             onTap: _openMasterKategori,
           ),
-          _buildMasterSubmenu('Master Tindak Lanjut'),
+          _buildMasterSubmenu(
+            'Master Template Tindakan',
+            isSelected: currentRoute == Routes.MASTER_TEMPLATE_TINDAKAN,
+            onTap: _openMasterTemplateTindakan,
+          ),
+          // _buildMasterSubmenu('Master Tindak Lanjut'),
           _buildMasterSubmenu(
             'Master Role',
             isSelected: currentRoute == Routes.MASTER_ROLE,
@@ -623,6 +628,16 @@ class SidebarWidget extends StatelessWidget {
 
     if (isMobile) Get.back();
     Get.offNamed(Routes.MASTER_KATEGORI);
+  }
+
+  void _openMasterTemplateTindakan() {
+    if (currentRoute == Routes.MASTER_TEMPLATE_TINDAKAN) {
+      if (isMobile) Get.back();
+      return;
+    }
+
+    if (isMobile) Get.back();
+    Get.offNamed(Routes.MASTER_TEMPLATE_TINDAKAN);
   }
 
   void _openMasterRole() {

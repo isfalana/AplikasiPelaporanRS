@@ -10,5 +10,6 @@ abstract class Routes {
   static const MASTER_UNIT = '/master-unit';
   static const MASTER_KARYAWAN = '/master-karyawan';
   static const MASTER_KATEGORI = '/master-kategori';
+  static const MASTER_TEMPLATE_TINDAKAN = '/master-template-tindakan';
   static const MASTER_ROLE = '/master-role';
 }
