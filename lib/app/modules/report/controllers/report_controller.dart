@@ -14,6 +14,13 @@ class ReportController extends GetxController {
   final selectedUnit = 'Semua'.obs;
   final searchQuery = ''.obs;
 
+  bool get hasActiveFilters =>
+      dateRange.value != null ||
+      selectedType.value != 'Semua' ||
+      selectedStatus.value != 'Semua' ||
+      selectedUnit.value != 'Semua' ||
+      searchQuery.value.trim().isNotEmpty;
+
   static const exportHeaders = [
     'Tanggal Laporan',
     'Tanggal Kejadian',

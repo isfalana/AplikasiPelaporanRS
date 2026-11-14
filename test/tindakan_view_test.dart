@@ -1,4 +1,5 @@
 import 'package:aplikasilaporan/app/routes/app_pages.dart';
+import 'package:aplikasilaporan/app/global_widgets/report_style_card.dart';
 import 'package:aplikasilaporan/app/modules/laporan/controllers/laporan_controller.dart';
 import 'package:aplikasilaporan/app/modules/tindakan/controllers/tindakan_controller.dart';
 import 'package:aplikasilaporan/app/core/theme/app_colors.dart';
@@ -35,21 +36,15 @@ void main() {
     expect(find.byType(TextField), findsNWidgets(2));
     final cardTitleFinder = find.text('Kerusakan AC Ruang IGD').last;
     final cardTitle = tester.widget<Text>(cardTitleFinder);
-    expect(cardTitle.style?.fontSize, 16);
-    expect(cardTitle.style?.fontWeight, FontWeight.bold);
-    final cardContainer = tester.widget<Container>(
-      find
-          .ancestor(of: cardTitleFinder, matching: find.byType(Container))
-          .first,
-    );
-    final cardDecoration = cardContainer.decoration! as BoxDecoration;
-    expect(cardDecoration.color, AppColors.white);
-    expect(cardDecoration.border, isA<Border>());
+    expect(cardTitle.style?.fontSize, 15);
+    expect(cardTitle.style?.fontWeight, FontWeight.w700);
+    expect(find.byType(ReportStyleCard), findsWidgets);
     final cardMaterial = tester.widget<Material>(
       find.ancestor(of: cardTitleFinder, matching: find.byType(Material)).first,
     );
     expect(cardMaterial.color, AppColors.white);
     expect(cardMaterial.surfaceTintColor, AppColors.white);
+    expect(find.text('Keterangan laporan'), findsNothing);
 
     final tindakanController = Get.find<TindakanController>();
     expect(tindakanController.noteController.text, isEmpty);

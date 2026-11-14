@@ -27,12 +27,13 @@ void main() {
 
     expect(find.text('Prioritas tindak lanjut'), findsOneWidget);
     expect(find.text('Tanggal laporan'), findsWidgets);
-    expect(find.text('Last update by'), findsWidgets);
-    expect(find.text('High'), findsOneWidget);
-    expect(find.text('Mid'), findsWidgets);
+    expect(find.text('Pelapor'), findsWidgets);
+    expect(find.text('Tinggi'), findsOneWidget);
+    expect(find.text('Sedang'), findsOneWidget);
     expect(find.text('Open'), findsOneWidget);
     expect(find.text('On Progress'), findsOneWidget);
-    expect(find.text('Done'), findsOneWidget);
+    expect(find.text('LAP-001'), findsOneWidget);
+    expect(find.text('LAP-002'), findsOneWidget);
     expect(find.text('Laporan'), findsOneWidget);
     expect(tester.takeException(), isNull);
 

@@ -13,6 +13,12 @@ import '../modules/master/bindings/master_unit_binding.dart';
 import '../modules/master/views/master_unit_view.dart';
 import '../modules/master/bindings/master_karyawan_binding.dart';
 import '../modules/master/views/master_karyawan_view.dart';
+import '../modules/master/bindings/master_kategori_binding.dart';
+import '../modules/master/views/master_kategori_view.dart';
+import '../modules/master/bindings/master_role_binding.dart';
+import '../modules/master/views/master_role_view.dart';
+import '../modules/master/bindings/master_template_tindakan_binding.dart';
+import '../modules/master/views/master_template_tindakan_view.dart';
 // Import nanti jika module sudah dibuat
 import '../modules/auth/bindings/auth_binding.dart';
 import '../modules/auth/views/login_view.dart';
@@ -70,6 +76,24 @@ class AppPages {
       name: Routes.MASTER_KARYAWAN,
       page: () => const MasterKaryawanView(),
       binding: MasterKaryawanBinding(),
+      transition: Transition.noTransition,
+    ),
+    GetPage(
+      name: Routes.MASTER_KATEGORI,
+      page: () => const MasterKategoriView(),
+      binding: MasterKategoriBinding(),
+      transition: Transition.noTransition,
+    ),
+    GetPage(
+      name: Routes.MASTER_TEMPLATE_TINDAKAN,
+      page: () => const MasterTemplateTindakanView(),
+      binding: MasterTemplateTindakanBinding(),
+      transition: Transition.noTransition,
+    ),
+    GetPage(
+      name: Routes.MASTER_ROLE,
+      page: () => const MasterRoleView(),
+      binding: MasterRoleBinding(),
       transition: Transition.noTransition,
     ),
   ];

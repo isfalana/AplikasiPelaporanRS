@@ -21,6 +21,9 @@ void main() {
     );
     await tester.pump();
 
+    expect(find.text('Kerusakan AC Ruang IGD'), findsNothing);
+    expect(find.byType(Card), findsNothing);
+
     await tester.tap(find.textContaining('PIC Umum'));
     await tester.tap(find.text('Masuk'));
     await tester.pump(const Duration(seconds: 2));

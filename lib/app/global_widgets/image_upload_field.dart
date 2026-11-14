@@ -1,15 +1,18 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../core/theme/app_colors.dart';
+import 'bukti_preview.dart';
 
-/// Field upload gambar dengan pratinjau lokal.
+/// Field upload bukti dengan pratinjau lokal.
 ///
-/// Gambar dipilih langsung dari galeri/kamera perangkat, lalu ditampilkan
-/// sebagai pratinjau di aplikasi. Penyimpanan ke server belum tersedia, jadi
-/// file hanya disimpan di memori selama aplikasi berjalan.
+/// Mendukung gambar (galeri/kamera) maupun dokumen (PDF, DOC, XLS, dll).
+/// File dipilih langsung dari perangkat, lalu ditampilkan sebagai pratinjau
+/// kecil yang bisa diklik untuk dilihat lebih besar. Penyimpanan ke server
+/// belum tersedia, jadi file hanya disimpan di memori selama aplikasi jalan.
 class ImageUploadField extends StatelessWidget {
   const ImageUploadField({
     super.key,
@@ -17,7 +20,7 @@ class ImageUploadField extends StatelessWidget {
     required this.bytes,
     required this.onChanged,
     this.label = 'Upload bukti',
-    this.hint = 'JPG, PNG, atau WEBP',
+    this.hint = 'Gambar (JPG, PNG, WEBP) atau dokumen (PDF, DOC, XLS)',
   });
 
   /// Nama file yang sedang terpilih.
@@ -26,7 +29,7 @@ class ImageUploadField extends StatelessWidget {
   /// Isi file untuk pratinjau. Bisa null bila hanya nama file yang tersimpan.
   final Uint8List? bytes;
 
-  /// Dipanggil setelah gambar dipilih atau dihapus.
+  /// Dipanggil setelah file dipilih atau dihapus.
   final void Function(String fileName, Uint8List? bytes) onChanged;
 
   final String label;
@@ -81,7 +84,7 @@ class ImageUploadField extends StatelessWidget {
               borderRadius: BorderRadius.circular(9),
             ),
             child: const Icon(
-              Icons.image_outlined,
+              Icons.upload_file_outlined,
               size: 20,
               color: AppColors.primary,
             ),
@@ -91,7 +94,7 @@ class ImageUploadField extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
-                'Belum ada gambar dipilih',
+                'Belum ada file dipilih',
                 style: TextStyle(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w600,
@@ -107,8 +110,8 @@ class ImageUploadField extends StatelessWidget {
           ),
           OutlinedButton.icon(
             onPressed: () => _chooseSource(context),
-            icon: const Icon(Icons.add_photo_alternate_outlined, size: 17),
-            label: const Text('Pilih gambar'),
+            icon: const Icon(Icons.attach_file_rounded, size: 17),
+            label: const Text('Pilih file'),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.primary,
               side: BorderSide(
@@ -134,42 +137,15 @@ class ImageUploadField extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (bytes != null)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: Image.memory(
-                bytes!,
-                height: 150,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => _brokenImage(),
-              ),
-            )
-          else
-            _brokenImage(),
-          const SizedBox(height: 8),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(
-                Icons.insert_drive_file_outlined,
-                size: 16,
-                color: AppColors.textWeak,
+              Expanded(
+                child: BuktiPreviewTile(fileName: fileName, bytes: bytes),
               ),
               const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  fileName.trim().isEmpty ? 'Gambar bukti' : fileName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textStrong,
-                  ),
-                ),
-              ),
               IconButton(
-                tooltip: 'Ganti gambar',
+                tooltip: 'Ganti file',
                 onPressed: () => _chooseSource(context),
                 icon: const Icon(
                   Icons.sync_rounded,
@@ -179,7 +155,7 @@ class ImageUploadField extends StatelessWidget {
                 visualDensity: VisualDensity.compact,
               ),
               IconButton(
-                tooltip: 'Hapus gambar',
+                tooltip: 'Hapus file',
                 onPressed: () => onChanged('', null),
                 icon: const Icon(
                   Icons.delete_outline_rounded,
@@ -190,6 +166,7 @@ class ImageUploadField extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 6),
           const Text(
             'Pratinjau lokal - belum diunggah ke server.',
             style: TextStyle(fontSize: 10.5, color: AppColors.textWeak),
@@ -199,26 +176,8 @@ class ImageUploadField extends StatelessWidget {
     );
   }
 
-  Widget _brokenImage() {
-    return Container(
-      height: 110,
-      width: double.infinity,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: const Icon(
-        Icons.broken_image_outlined,
-        size: 30,
-        color: AppColors.textWeak,
-      ),
-    );
-  }
-
   Future<void> _chooseSource(BuildContext context) async {
-    final source = await showModalBottomSheet<ImageSource>(
+    final source = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
@@ -245,7 +204,7 @@ class ImageUploadField extends StatelessWidget {
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    'Pilih sumber gambar',
+                    'Pilih sumber bukti',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
@@ -261,7 +220,7 @@ class ImageUploadField extends StatelessWidget {
                 ),
                 title: const Text('Galeri'),
                 subtitle: const Text('Pilih gambar dari perangkat'),
-                onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+                onTap: () => Navigator.of(context).pop('gallery'),
               ),
               if (_supportsCamera)
                 ListTile(
@@ -271,8 +230,17 @@ class ImageUploadField extends StatelessWidget {
                   ),
                   title: const Text('Kamera'),
                   subtitle: const Text('Ambil gambar langsung'),
-                  onTap: () => Navigator.of(context).pop(ImageSource.camera),
+                  onTap: () => Navigator.of(context).pop('camera'),
                 ),
+              ListTile(
+                leading: const Icon(
+                  Icons.description_outlined,
+                  color: AppColors.primary,
+                ),
+                title: const Text('Dokumen'),
+                subtitle: const Text('PDF, DOC, XLS, dan lainnya'),
+                onTap: () => Navigator.of(context).pop('document'),
+              ),
               const SizedBox(height: 8),
             ],
           ),
@@ -280,7 +248,79 @@ class ImageUploadField extends StatelessWidget {
       ),
     );
     if (source == null) return;
-    await _pickImage(source);
+    if (source == 'gallery') {
+      await _pickImage(ImageSource.gallery);
+    } else if (source == 'camera') {
+      await _pickImage(ImageSource.camera);
+    } else if (source == 'document') {
+      await _pickDocument();
+    }
+  }
+
+  /// Ekstensi dokumen yang boleh dipilih pada field bukti.
+  static const List<String> _allowedExtensions = <String>[
+    'pdf',
+    'doc',
+    'docx',
+    'rtf',
+    'odt',
+    'xls',
+    'xlsx',
+    'csv',
+    'ods',
+    'ppt',
+    'pptx',
+    'odp',
+    'txt',
+    'png',
+    'jpg',
+    'jpeg',
+    'webp',
+    'gif',
+    'zip',
+    'rar',
+    '7z',
+    'mp4',
+    'mp3',
+  ];
+
+  Future<void> _pickDocument() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: _allowedExtensions,
+        withData: true,
+      );
+      if (result == null || result.files.isEmpty) return;
+      final file = result.files.first;
+      final data = file.bytes;
+      if (data == null) {
+        Get.snackbar(
+          'Perhatian',
+          'Isi file tidak dapat dibaca. Coba pilih file lain.',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: AppColors.warning,
+          colorText: AppColors.white,
+          margin: const EdgeInsets.all(16),
+        );
+        return;
+      }
+      final name = file.name.trim().isEmpty
+          ? 'bukti_${DateTime.now().millisecondsSinceEpoch}.'
+                '${file.extension ?? 'file'}'
+          : file.name;
+      onChanged(name, data);
+    } catch (_) {
+      Get.snackbar(
+        'Tidak dapat membuka file',
+        'Pemilih file belum tersedia di perangkat ini. Coba lewat aplikasi '
+            'pendukung atau jalankan aplikasi di browser.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: AppColors.warning,
+        colorText: AppColors.white,
+        margin: const EdgeInsets.all(16),
+      );
+    }
   }
 
   Future<void> _pickImage(ImageSource source) async {

@@ -5,6 +5,7 @@ import '../controllers/dashboard_controller.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../global_widgets/filter_menu_button.dart';
 import '../../../global_widgets/main_layout_widget.dart';
+import '../../../global_widgets/report_style_card.dart';
 
 class DashboardView extends GetView<DashboardController> {
   const DashboardView({super.key});
@@ -43,6 +44,15 @@ class DashboardView extends GetView<DashboardController> {
               : 1;
           final cardWidth =
               (availableWidth - (columnCount - 1) * 16) / columnCount;
+          // Kartu prioritas memakai grid agar tidak melebar penuh di desktop.
+          final priorityColumnCount = constraints.maxWidth >= 1400
+              ? 3
+              : constraints.maxWidth >= 900
+              ? 2
+              : 1;
+          final priorityCardWidth =
+              (availableWidth - (priorityColumnCount - 1) * 16) /
+              priorityColumnCount;
 
           return SingleChildScrollView(
             padding: EdgeInsets.symmetric(
@@ -78,7 +88,7 @@ class DashboardView extends GetView<DashboardController> {
                       child: Obx(
                         () => _buildMetricCard(
                           'Laporan Terkirim',
-                          controller.jumlahLaporan.value.toString(),
+                          controller.jumlahLaporan.toString(),
                           AppColors.primary,
                         ),
                       ),
@@ -88,7 +98,7 @@ class DashboardView extends GetView<DashboardController> {
                       child: Obx(
                         () => _buildMetricCard(
                           'Pesan Tindakan',
-                          controller.jumlahPesanTindakan.value.toString(),
+                          controller.jumlahPesanTindakan.toString(),
                           AppColors.warning,
                         ),
                       ),
@@ -98,7 +108,7 @@ class DashboardView extends GetView<DashboardController> {
                       child: Obx(
                         () => _buildMetricCard(
                           'Tindakan Selesai',
-                          controller.jumlahTindakanSelesai.value.toString(),
+                          controller.jumlahTindakanSelesai.toString(),
                           AppColors.success,
                         ),
                       ),
@@ -120,56 +130,57 @@ class DashboardView extends GetView<DashboardController> {
                     ),
                     const SizedBox(width: 8),
                     Obx(
-                      () => FilterMenuButton(
-                        value: controller.priorityFilter.value,
+                      () => MultiFilterMenuButton(
+                        selectedValues: controller.priorityFilters.toSet(),
                         entries: reportFilterEntries(),
-                        onSelected: (value) =>
-                            controller.priorityFilter.value = value,
+                        onSelected: (values) {
+                          controller.priorityFilters
+                            ..clear()
+                            ..addAll(values);
+                        },
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
                 Obx(() {
-                  final priorityReports = controller.listLaporan
-                      .where(
-                        (laporan) => matchesReportFilter(
-                          laporan,
-                          controller.priorityFilter.value,
-                        ),
-                      )
-                      .toList()
-                    ..sort((first, second) {
-                      int priority(Map<String, dynamic> laporan) {
-                        return switch (laporan['prioritas']
-                            ?.toString()
-                            .toLowerCase()) {
-                          'high' => 0,
-                          'mid' => 1,
-                          'low' => 2,
-                          _ => 3,
-                        };
-                      }
+                  final priorityReports =
+                      controller.listLaporan
+                          .where(
+                            (laporan) => matchesReportFilters(
+                              laporan,
+                              controller.priorityFilters,
+                            ),
+                          )
+                          .toList()
+                        ..sort((first, second) {
+                          int priority(Map<String, dynamic> laporan) {
+                            return switch (controller.priorityLabel(laporan)) {
+                              'Tinggi' => 0,
+                              'Sedang' => 1,
+                              'Rendah' => 2,
+                              _ => 3,
+                            };
+                          }
 
-                      final priorityOrder = priority(first)
-                          .compareTo(priority(second));
-                      if (priorityOrder != 0) {
-                        return priorityOrder;
-                      }
+                          final priorityOrder = priority(first)
+                              .compareTo(priority(second));
+                          if (priorityOrder != 0) {
+                            return priorityOrder;
+                          }
 
-                      int statusOrder(Map<String, dynamic> laporan) {
-                        return switch (laporan['status']
-                            ?.toString()
-                            .toLowerCase()) {
-                          'open' => 0,
-                          'on progress' => 1,
-                          'done' => 2,
-                          _ => 3,
-                        };
-                      }
+                          int statusOrder(Map<String, dynamic> laporan) {
+                            return switch (controller.statusLabel(laporan)) {
+                              'Open' => 0,
+                              'On Progress' => 1,
+                              'Done' => 2,
+                              _ => 3,
+                            };
+                          }
 
-                      return statusOrder(first).compareTo(statusOrder(second));
-                    });
+                          return statusOrder(first)
+                              .compareTo(statusOrder(second));
+                        });
 
                   if (controller.isLoading.value &&
                       controller.listLaporan.isEmpty) {
@@ -188,9 +199,16 @@ class DashboardView extends GetView<DashboardController> {
                     return _buildEmptyState();
                   }
 
-                  return Column(
+                  return Wrap(
+                    spacing: 16,
+                    runSpacing: 6,
                     children: priorityReports
-                        .map((laporan) => _buildReportCard(laporan))
+                        .map(
+                          (laporan) => SizedBox(
+                            width: priorityCardWidth,
+                            child: _buildReportCard(laporan),
+                          ),
+                        )
                         .toList(),
                   );
                 }),
@@ -262,152 +280,68 @@ class DashboardView extends GetView<DashboardController> {
   }
 
   Widget _buildReportCard(Map<String, dynamic> laporan) {
-    final status = laporan['status']?.toString() ?? 'Open';
-    final statusColor = switch (status.toLowerCase()) {
-      'done' => AppColors.success,
-      'open' => AppColors.warning,
-      'on progress' => AppColors.info,
+    final status = controller.statusLabel(laporan);
+    final prioritas = controller.priorityLabel(laporan);
+    final priorityColor = switch (prioritas) {
+      'Tinggi' => AppColors.error,
+      'Sedang' => AppColors.warning,
+      'Rendah' => AppColors.success,
       _ => AppColors.textWeak,
     };
-    final prioritas = laporan['prioritas']?.toString() ?? 'Low';
-    final priorityColor = switch (prioritas.toLowerCase()) {
-      'high' => AppColors.error,
-      'mid' => AppColors.warning,
-      'low' => AppColors.success,
-      _ => AppColors.textWeak,
-    };
+    final kategori =
+        laporan['id_kategori']?.toString().trim().isNotEmpty == true
+        ? laporan['id_kategori'].toString()
+        : '-';
+    final deadline = laporan['deadline']?.toString().trim();
+    final lastUpdatedBy =
+        laporan['last_update_by']?.toString() ??
+        laporan['lastUpdateBy']?.toString() ??
+        laporan['update_by']?.toString() ??
+        laporan['updateBy']?.toString() ??
+        '-';
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  laporan['id']?.toString() ?? 'Laporan',
-                  style: const TextStyle(
-                    color: AppColors.textWeak,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.3,
-                  ),
-                ),
-              ),
-              _buildReportBadge(status, statusColor, background: true),
-              const SizedBox(width: 8),
-              _buildReportBadge(prioritas, priorityColor, background: false),
-            ],
+    return ReportStyleCard(
+      reportId: laporan['id_laporan']?.toString() ?? 'Laporan',
+      title: laporan['perihal']?.toString() ?? 'Tanpa perihal',
+      status: status,
+      metaChips: [
+        ReportMetaChip(icon: Icons.folder_outlined, label: kategori),
+        if (prioritas != '-')
+          ReportMetaChip(
+            icon: Icons.flag_outlined,
+            label: prioritas,
+            color: priorityColor,
           ),
-          const SizedBox(height: 14),
-          Text(
-            laporan['perihal']?.toString() ?? 'Tanpa perihal',
-            style: const TextStyle(
-              color: AppColors.textStrong,
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              height: 1.35,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 24,
-            runSpacing: 12,
-            children: [
-              _buildReportDetail(
-                Icons.calendar_today_outlined,
-                'Tanggal laporan',
-                laporan['tanggal']?.toString() ?? '-',
-              ),
-              _buildReportDetail(
-                Icons.event_outlined,
-                'Deadline',
-                laporan['deadline']?.toString() ?? '-',
-              ),
-              _buildReportDetail(
-                Icons.person_outline,
-                'PIC',
-                laporan['pic']?.toString() ?? '-',
-              ),
-              _buildReportDetail(
-                Icons.history_outlined,
-                'Last update by',
-                laporan['lastUpdateBy']?.toString() ?? '-',
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildReportBadge(
-    String text,
-    Color color, {
-    required bool background,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: background ? color.withValues(alpha: 0.1) : Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
-        border: background
-            ? null
-            : Border.all(color: color.withValues(alpha: 0.4)),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: color,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
+      ],
+      infoItems: [
+        ReportInfoItem(
+          icon: Icons.calendar_today_outlined,
+          label: 'Tanggal laporan',
+          value: controller.reportDate(laporan),
         ),
-      ),
-    );
-  }
-
-  Widget _buildReportDetail(IconData icon, String label, String value) {
-    return SizedBox(
-      width: 190,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 16, color: AppColors.textWeak),
-          const SizedBox(width: 7),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: AppColors.textWeak,
-                    fontSize: 10,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  value,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.textStrong,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+        ReportInfoItem(
+          icon: Icons.event_outlined,
+          label: 'Deadline',
+          value: deadline == null || deadline.isEmpty ? '-' : deadline,
+        ),
+        ReportInfoItem(
+          icon: Icons.history_outlined,
+          label: 'Last update by',
+          value: lastUpdatedBy,
+        ),
+      ],
+      people: [
+        ReportPersonRow(
+          icon: Icons.account_circle_outlined,
+          label: 'Pelapor',
+          value: controller.reporter(laporan),
+        ),
+        ReportPersonRow(
+          icon: Icons.assignment_ind_outlined,
+          label: 'PIC',
+          value: controller.reportPic(laporan),
+        ),
+      ],
     );
   }
 

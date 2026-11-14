@@ -7,9 +7,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../controllers/laporan_controller.dart';
 import '../../../core/theme/app_buttons.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../global_widgets/bukti_preview.dart';
 import '../../../global_widgets/filter_menu_button.dart';
 import '../../../global_widgets/image_upload_field.dart';
 import '../../../global_widgets/main_layout_widget.dart';
+import '../../../global_widgets/report_style_card.dart';
 
 class LaporanView extends GetView<LaporanController> {
   const LaporanView({super.key});
@@ -271,11 +273,105 @@ class _LaporanContentState extends State<_LaporanContent> {
     }
   }
 
+  /// Ringkasan status validasi pelapor pada kartu dan detail laporan.
+  String _validationLabel(Map<String, dynamic> report) {
+    if (report['validasi_pelapor'] == true) {
+      final date = report['tgl_validasi']?.toString().trim() ?? '';
+      final by = report['nama_validasi_by']?.toString().trim() ?? '';
+      if (date.isNotEmpty && by.isNotEmpty) return '$date oleh $by';
+      if (date.isNotEmpty) return 'Tervalidasi $date';
+      return 'Tervalidasi';
+    }
+    return 'Menunggu validasi pelapor';
+  }
+
+  /// Pelapor mengonfirmasi bahwa laporan beserta tindak lanjutnya benar-benar
+  /// sudah selesai (Done).
+  Future<void> _confirmValidate(Map<String, dynamic> report) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text(
+          'Validasi laporan?',
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textStrong,
+          ),
+        ),
+        content: Text(
+          'Pastikan laporan ${report['id_laporan'] ?? ''} beserta seluruh '
+          'tindak lanjutnya benar-benar sudah selesai. Setelah divalidasi, '
+          'kartu laporan akan ditandai tervalidasi.',
+          style: const TextStyle(
+            fontSize: 13,
+            color: AppColors.textWeak,
+            height: 1.5,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            style: TextButton.styleFrom(foregroundColor: AppColors.textWeak),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.success,
+              backgroundColor: AppColors.success.withValues(alpha: 0.08),
+            ),
+            child: const Text('Valid'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final id = report['id_laporan']?.toString();
+    var target = report;
+    for (final item in controller.listLaporan) {
+      if (item['id_laporan']?.toString() == id) {
+        target = item;
+        break;
+      }
+    }
+    target['validasi_pelapor'] = true;
+    target['tgl_validasi'] = _formatDate(DateTime.now());
+    target['validasi_by'] = _activeNik;
+    target['nama_validasi_by'] = _pelaporName(_activeName, _activeNik);
+    controller.listLaporan.refresh();
+
+    if (!mounted) return;
+    setState(() {});
+    Get.snackbar(
+      'Berhasil',
+      'Laporan dan tindak lanjut dinyatakan selesai oleh pelapor.',
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: AppColors.success,
+      colorText: AppColors.white,
+      margin: const EdgeInsets.all(16),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (_viewingReport case final report?) {
+    if (_viewingReport case final viewing?) {
       return Obx(() {
-        widget.controller.listLaporan.length;
+        // Baca langsung dari daftar reaktif supaya perubahan dari halaman
+        // Tindakan (status, keterangan, bukti, validasi) langsung tampil.
+        final reports = controller.listLaporan;
+        reports.length;
+        Map<String, dynamic> report = viewing;
+        final id = viewing['id_laporan']?.toString();
+        for (final item in reports) {
+          if (item['id_laporan']?.toString() == id) {
+            report = item;
+            break;
+          }
+        }
         return _buildDetail(report);
       });
     }
@@ -400,15 +496,7 @@ class _LaporanContentState extends State<_LaporanContent> {
           return Column(
             children: controller.listLaporan
                 .where((report) => matchesReportFilters(report, _reportFilters))
-                .map(
-                  (report) => Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: _buildReportCard(report),
-                    ),
-                  ),
-                )
+                .map(_buildReportCard)
                 .toList(),
           );
         }),
@@ -596,10 +684,12 @@ class _LaporanContentState extends State<_LaporanContent> {
 
   Widget _buildReportCard(Map<String, dynamic> report) {
     final status = _displayStatus(report['status']?.toString());
-    final priorityColor = switch (report['prioritas']?.toString()) {
+    final priority = report['prioritas']?.toString().trim();
+    final priorityColor = switch (priority) {
       'Tinggi' => AppColors.error,
       'Sedang' => AppColors.warning,
-      _ => AppColors.success,
+      'Rendah' => AppColors.success,
+      _ => AppColors.textWeak,
     };
     final reportDate =
         report['tgl_laporan']?.toString() ??
@@ -612,92 +702,137 @@ class _LaporanContentState extends State<_LaporanContent> {
         report['update_by']?.toString() ??
         report['updateBy']?.toString() ??
         '-';
+    final kategori = report['id_kategori']?.toString().trim();
+    final deadline = report['deadline']?.toString().trim();
+    final isDone = status == 'Done';
+    final isValidated = report['validasi_pelapor'] == true;
 
-    return InkWell(
-      borderRadius: BorderRadius.circular(10),
+    return ReportStyleCard(
+      reportId: report['id_laporan']?.toString() ?? '-',
+      title: report['perihal']?.toString() ?? '-',
+      status: status,
       onTap: () => setState(() => _viewingReport = report),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: _cardDecoration(),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    report['id_laporan']?.toString() ?? '-',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Edit laporan',
-                  onPressed: () => _loadForEdit(report),
-                  icon: const Icon(
-                    Icons.edit_outlined,
-                    size: 17,
-                    color: AppColors.primary,
-                  ),
-                  visualDensity: VisualDensity.compact,
-                ),
-                _statusPill(status),
-                PopupMenuButton<String>(
-                  tooltip: 'Aksi laporan',
-                  onSelected: (_) => _confirmDelete(report),
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(value: 'delete', child: Text('Hapus')),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              report['perihal']?.toString() ?? '-',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textStrong,
-              ),
-            ),
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 20,
-              runSpacing: 14,
-              children: [
-                _reportCardInfo(
-                  Icons.calendar_today_outlined,
-                  'Tanggal laporan',
-                  reportDate,
-                ),
-                _reportCardInfo(
-                  Icons.event_outlined,
-                  'Deadline',
-                  report['deadline']?.toString() ?? '-',
-                ),
-                _reportCardInfo(
-                  Icons.account_circle_outlined,
-                  'Pelapor',
-                  _pelaporDisplay(report),
-                ),
-                _reportCardInfo(Icons.person_outline, 'PIC', pic),
-                _reportCardInfo(
-                  Icons.history_outlined,
-                  'Last update by',
-                  lastUpdatedBy,
-                ),
-                _infoTag(
-                  Icons.flag_outlined,
-                  'Prioritas',
-                  report['prioritas']?.toString() ?? '-',
-                  priorityColor,
-                ),
-              ],
-            ),
+      metaChips: [
+        if (kategori != null && kategori.isNotEmpty)
+          ReportMetaChip(icon: Icons.folder_outlined, label: kategori),
+        if (priority != null && priority.isNotEmpty && priority != '-')
+          ReportMetaChip(
+            icon: Icons.flag_outlined,
+            label: priority,
+            color: priorityColor,
+          ),
+        if (isDone && isValidated)
+          const ReportMetaChip(
+            icon: Icons.verified_outlined,
+            label: 'Laporan & tindakan tervalidasi',
+            color: AppColors.success,
+          ),
+      ],
+      infoItems: [
+        ReportInfoItem(
+          icon: Icons.calendar_today_outlined,
+          label: 'Tanggal laporan',
+          value: reportDate,
+        ),
+        ReportInfoItem(
+          icon: Icons.event_outlined,
+          label: 'Deadline',
+          value: deadline == null || deadline.isEmpty ? '-' : deadline,
+        ),
+        ReportInfoItem(
+          icon: Icons.history_outlined,
+          label: 'Last update by',
+          value: lastUpdatedBy,
+        ),
+        if (isDone)
+          ReportInfoItem(
+            icon: Icons.how_to_reg_outlined,
+            label: 'Validasi pelapor',
+            value: _validationLabel(report),
+          ),
+      ],
+      people: [
+        ReportPersonRow(
+          icon: Icons.account_circle_outlined,
+          label: 'Pelapor',
+          value: _pelaporDisplay(report),
+        ),
+        ReportPersonRow(
+          icon: Icons.assignment_ind_outlined,
+          label: 'PIC',
+          value: pic,
+        ),
+      ],
+      actions: [
+        if (isDone && !isValidated) _validateButton(report),
+        _cardActionButton(
+          tooltip: 'Edit laporan',
+          onPressed: () => _loadForEdit(report),
+          icon: const Icon(
+            Icons.edit_outlined,
+            size: 17,
+            color: AppColors.primary,
+          ),
+        ),
+        PopupMenuButton<String>(
+          tooltip: 'Aksi laporan',
+          padding: EdgeInsets.zero,
+          iconSize: 18,
+          splashRadius: 16,
+          style: IconButton.styleFrom(
+            minimumSize: const Size(30, 30),
+            maximumSize: const Size(30, 30),
+            padding: EdgeInsets.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          onSelected: (_) => _confirmDelete(report),
+          itemBuilder: (context) => const [
+            PopupMenuItem(value: 'delete', child: Text('Hapus')),
           ],
+        ),
+      ],
+    );
+  }
+
+  /// Tombol aksi kecil agar area edit/hapus tidak memakan tinggi kartu.
+  Widget _cardActionButton({
+    required String tooltip,
+    required VoidCallback onPressed,
+    required Widget icon,
+  }) {
+    return SizedBox(
+      width: 30,
+      height: 30,
+      child: IconButton(
+        tooltip: tooltip,
+        onPressed: onPressed,
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints.tightFor(width: 30, height: 30),
+        visualDensity: VisualDensity.compact,
+        splashRadius: 15,
+        icon: icon,
+      ),
+    );
+  }
+
+  /// Tombol validasi pelapor agar laporan Done dari penindak bisa langsung
+  /// divalidasi dengan satu klik dari kartu laporan.
+  Widget _validateButton(Map<String, dynamic> report) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 4),
+      child: OutlinedButton.icon(
+        onPressed: () => _confirmValidate(report),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.success,
+          side: const BorderSide(color: AppColors.success),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          visualDensity: VisualDensity.compact,
+        ),
+        icon: const Icon(Icons.how_to_reg_outlined, size: 15),
+        label: const Text(
+          'Validasi',
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
         ),
       ),
     );
@@ -787,57 +922,6 @@ class _LaporanContentState extends State<_LaporanContent> {
     return values.isEmpty ? '-' : values.join(' · ');
   }
 
-  Widget _buildBuktiPreview(Uint8List bytes) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
-      child: Image.memory(
-        bytes,
-        height: 180,
-        width: double.infinity,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
-      ),
-    );
-  }
-
-  Widget _reportCardInfo(IconData icon, String label, String value) {
-    return SizedBox(
-      width: 190,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 16, color: AppColors.textWeak),
-          const SizedBox(width: 7),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: AppColors.textWeak,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  value.isEmpty ? '-' : value,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.textStrong,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildDetail(Map<String, dynamic> report) {
     final details = <(String, String)>[
       ('Tanggal kejadian', report['tgl_kejadian']?.toString() ?? '-'),
@@ -847,6 +931,10 @@ class _LaporanContentState extends State<_LaporanContent> {
       ('Prioritas', report['prioritas']?.toString() ?? '-'),
       ('Deadline', report['deadline']?.toString() ?? '-'),
       ('Bukti laporan', report['bukti']?.toString() ?? '-'),
+      (
+        'Last update by',
+        (report['last_update_by'] ?? report['lastUpdateBy'])?.toString() ?? '-',
+      ),
     ];
     final actionDetails = _actionDetails(report['detail_tindakan']);
     final actionProgress = _actionProgress(report['progres_tindakan']);
@@ -912,7 +1000,10 @@ class _LaporanContentState extends State<_LaporanContent> {
                 ),
                 if (report['bukti_bytes'] case final Uint8List bytes) ...[
                   const SizedBox(height: 16),
-                  _buildBuktiPreview(bytes),
+                  BuktiPreviewTile(
+                    fileName: report['bukti']?.toString() ?? '',
+                    bytes: bytes,
+                  ),
                 ],
                 const Divider(height: 32),
                 const Text(
@@ -981,6 +1072,20 @@ class _LaporanContentState extends State<_LaporanContent> {
                   'Keterangan tindak lanjut',
                   report['keterangan_tindakan']?.toString() ?? '-',
                 ),
+                const SizedBox(height: 12),
+                _detailField(
+                  'Bukti tindak lanjut',
+                  report['bukti_tindakan']?.toString() ?? '-',
+                ),
+                if (report['bukti_tindakan_bytes']
+                    case final Uint8List bytes) ...[
+                  const SizedBox(height: 8),
+                  BuktiPreviewTile(
+                    fileName: report['bukti_tindakan']?.toString() ?? '',
+                    bytes: bytes,
+                  ),
+                ],
+                _validationSection(report),
                 const SizedBox(height: 20),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -994,6 +1099,81 @@ class _LaporanContentState extends State<_LaporanContent> {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  /// Blok validasi pelapor pada detail laporan berstatus Done.
+  Widget _validationSection(Map<String, dynamic> report) {
+    if (_displayStatus(report['status']?.toString()) != 'Done') {
+      return const SizedBox.shrink();
+    }
+    final validated = report['validasi_pelapor'] == true;
+    final canValidate = !validated;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: validated
+            ? AppColors.success.withValues(alpha: 0.06)
+            : AppColors.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: validated
+              ? AppColors.success.withValues(alpha: 0.35)
+              : AppColors.divider,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                validated ? Icons.verified_outlined : Icons.how_to_reg_outlined,
+                size: 18,
+                color: validated ? AppColors.success : AppColors.textWeak,
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Validasi Pelapor',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textStrong,
+                  ),
+                ),
+              ),
+              _validationPill(validated),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            validated
+                ? 'Pelapor menyatakan laporan beserta tindak lanjutnya sudah '
+                      'selesai. ${_validationLabel(report)}'
+                : 'Penindak menandai laporan ini Done. Pelapor perlu '
+                      'memvalidasi bahwa laporan dan tindak lanjut memang sudah '
+                      'selesai.',
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.textWeak,
+              height: 1.5,
+            ),
+          ),
+          if (canValidate) ...[
+            const SizedBox(height: 12),
+            ElevatedButton.icon(
+              onPressed: () => _confirmValidate(report),
+              style: AppButtons.primary,
+              icon: const Icon(Icons.how_to_reg_outlined, size: 17),
+              label: const Text('Validasi sebagai Pelapor'),
+            ),
+          ],
         ],
       ),
     );
@@ -1163,25 +1343,23 @@ class _LaporanContentState extends State<_LaporanContent> {
     );
   }
 
-  Widget _infoTag(IconData icon, String label, String value, Color color) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 15, color: color),
-        const SizedBox(width: 5),
-        RichText(
-          text: TextSpan(
-            style: TextStyle(color: color, fontSize: 12),
-            children: [
-              TextSpan(
-                text: '$label: ',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              TextSpan(text: value),
-            ],
-          ),
+  /// Pill khusus status validasi pelapor.
+  Widget _validationPill(bool validated) {
+    final color = validated ? AppColors.success : AppColors.warning;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        validated ? 'Tervalidasi' : 'Menunggu',
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
         ),
-      ],
+      ),
     );
   }
 
