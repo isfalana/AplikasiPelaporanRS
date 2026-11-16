@@ -288,10 +288,10 @@ class DashboardView extends GetView<DashboardController> {
       'Rendah' => AppColors.success,
       _ => AppColors.textWeak,
     };
-    final kategori =
-        laporan['id_kategori']?.toString().trim().isNotEmpty == true
-        ? laporan['id_kategori'].toString()
-        : '-';
+    final kategoriRaw = laporan['id_kategori']?.toString().trim() ?? '';
+    final kategori = kategoriRaw.isEmpty
+        ? '-'
+        : controller.laporanController.kategoriName(kategoriRaw);
     final deadline = laporan['deadline']?.toString().trim();
     final lastUpdatedBy =
         laporan['last_update_by']?.toString() ??

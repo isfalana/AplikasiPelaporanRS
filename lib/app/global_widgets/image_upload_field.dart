@@ -71,44 +71,55 @@ class ImageUploadField extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppColors.divider),
       ),
-      child: Wrap(
-        spacing: 12,
-        runSpacing: 10,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(9),
-            ),
-            child: const Icon(
-              Icons.upload_file_outlined,
-              size: 20,
-              color: AppColors.primary,
-            ),
-          ),
-          Column(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Pada layar sempit tombol turun ke baris sendiri agar tidak
+          // meluber ke kanan. Di layar lebar tombol tetap di samping info.
+          final isNarrow = constraints.maxWidth < 260;
+          final info = Row(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                'Belum ada file dipilih',
-                style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textStrong,
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: const Icon(
+                  Icons.upload_file_outlined,
+                  size: 20,
+                  color: AppColors.primary,
                 ),
               ),
-              const SizedBox(height: 2),
-              Text(
-                hint,
-                style: const TextStyle(fontSize: 11, color: AppColors.textWeak),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Belum ada file dipilih',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textStrong,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      hint,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textWeak,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
-          ),
-          OutlinedButton.icon(
+          );
+          final button = OutlinedButton.icon(
             onPressed: () => _chooseSource(context),
             icon: const Icon(Icons.attach_file_rounded, size: 17),
             label: const Text('Pilih file'),
@@ -119,8 +130,23 @@ class ImageUploadField extends StatelessWidget {
               ),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             ),
-          ),
-        ],
+          );
+
+          if (isNarrow) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [info, const SizedBox(height: 12), button],
+            );
+          }
+
+          return Row(
+            children: [
+              Expanded(child: info),
+              const SizedBox(width: 12),
+              button,
+            ],
+          );
+        },
       ),
     );
   }

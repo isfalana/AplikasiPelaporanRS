@@ -12,6 +12,7 @@ import 'package:printing/printing.dart';
 import '../../../core/theme/app_buttons.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../global_widgets/main_layout_widget.dart';
+import '../../auth/controllers/dashboard_controller.dart';
 import '../controllers/report_controller.dart';
 
 class ReportView extends GetView<ReportController> {
@@ -39,6 +40,12 @@ class _ReportContentState extends State<_ReportContent> {
   late final TextEditingController _searchController;
 
   ReportController get controller => widget.controller;
+
+  /// Cek hak akses akun yang sedang login.
+  bool _can(String permission) {
+    if (!Get.isRegistered<DashboardController>()) return true;
+    return Get.find<DashboardController>().can(permission);
+  }
 
   @override
   void initState() {
@@ -411,14 +418,15 @@ class _ReportContentState extends State<_ReportContent> {
         fontWeight: FontWeight.w600,
       ),
     );
+    final canExport = _can('report.export');
     final exportPdfButton = ElevatedButton.icon(
-      onPressed: () => _exportPdf(reports.length),
+      onPressed: canExport ? () => _exportPdf(reports.length) : null,
       icon: const Icon(Icons.picture_as_pdf_outlined, size: 17),
       label: const Text('Export PDF'),
       style: AppButtons.danger,
     );
     final exportExcelButton = ElevatedButton.icon(
-      onPressed: _exportExcel,
+      onPressed: canExport ? _exportExcel : null,
       icon: const Icon(Icons.table_view_outlined, size: 17),
       label: const Text('Export Excel'),
       style: AppButtons.success,

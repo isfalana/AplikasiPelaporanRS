@@ -601,21 +601,20 @@ class _KategoriFormDialogState extends State<_KategoriFormDialog> {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: AppColors.divider),
                   ),
-                  child: Row(
+                  child: Wrap(
+                    spacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Expanded(
-                        child: Text(
-                          _kategoriId,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textStrong,
-                          ),
+                      Text(
+                        _kategoriId,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textStrong,
                         ),
                       ),
-                      const SizedBox(width: 8),
                       Text(
                         _isEdit ? 'tidak dapat diubah' : 'dibuat otomatis',
                         style: const TextStyle(
@@ -632,7 +631,7 @@ class _KategoriFormDialogState extends State<_KategoriFormDialog> {
                   key: const ValueKey('kategori_jenis_field'),
                   controller: _nameController,
                   maxLength: 100,
-                  decoration: _inputDecoration('Contoh: Kelistrikan')
+                  decoration: _inputDecoration('Contoh: Arahan Direktur')
                       .copyWith(counterText: ''),
                   validator: (value) => (value == null || value.trim().isEmpty)
                       ? 'Jenis kategori wajib diisi.'

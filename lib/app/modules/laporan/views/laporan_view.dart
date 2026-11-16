@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../controllers/laporan_controller.dart';
+import '../../auth/controllers/dashboard_controller.dart';
 import '../../../core/theme/app_buttons.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../global_widgets/bukti_preview.dart';
@@ -70,6 +71,13 @@ class _LaporanContentState extends State<_LaporanContent> {
       _activeName = preferences.getString('nama_karyawan') ?? '';
       _activeUnit = preferences.getString('unit_name') ?? '';
     });
+  }
+
+  /// Cek hak akses akun yang sedang login. Bila sesi belum termuat, izinkan
+  /// agar tombol tidak sempat berkedip hilang.
+  bool _can(String permission) {
+    if (!Get.isRegistered<DashboardController>()) return true;
+    return Get.find<DashboardController>().can(permission);
   }
 
   @override
@@ -387,6 +395,11 @@ class _LaporanContentState extends State<_LaporanContent> {
         const formColumns = 2;
         final fieldWidth =
             (formContentWidth - (formColumns - 1) * fieldSpacing) / formColumns;
+        // Di layar sempit field upload dibuat selebar form supaya tombol dan
+        // keterangan file tidak meluber ke kanan.
+        final uploadWidth = constraints.maxWidth < 600
+            ? formContentWidth
+            : fieldWidth;
         return SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Column(
@@ -429,6 +442,7 @@ class _LaporanContentState extends State<_LaporanContent> {
                         fieldWidth,
                         fieldSpacing: fieldSpacing,
                         padding: formPadding,
+                        uploadWidth: uploadWidth,
                       ),
                     ),
                     const SizedBox(width: 20),
@@ -440,6 +454,7 @@ class _LaporanContentState extends State<_LaporanContent> {
                   fieldWidth,
                   fieldSpacing: fieldSpacing,
                   padding: formPadding,
+                  uploadWidth: uploadWidth,
                 ),
                 const SizedBox(height: 24),
                 _buildReportList(),
@@ -508,14 +523,25 @@ class _LaporanContentState extends State<_LaporanContent> {
     double fieldWidth, {
     required double fieldSpacing,
     required double padding,
+    required double uploadWidth,
   }) {
-    final categories = _availableValues('id_kategori');
-    final picOptions = _availableValues('id_nik_pic')
-        .expand((value) => value.split(','))
-        .map((value) => value.trim())
-        .where((value) => value.isNotEmpty)
-        .toSet()
-        .toList();
+    final kategoriOptions = controller.kategoriOptions;
+    final categoryLabels = <String, String>{
+      for (final kategori in kategoriOptions)
+        kategori['id_kategori']?.toString() ?? '':
+            kategori['jenis_kategori']?.toString() ?? '',
+    };
+    final picOptions =
+        <String>{
+          ...controller.employeeNiks,
+          ..._availableValues('id_nik_pic')
+              .expand((value) => value.split(','))
+              .map((value) => value.trim())
+              .where((value) => value.isNotEmpty),
+        }.toList()..sort(
+          (first, second) =>
+              controller.userName(first).compareTo(controller.userName(second)),
+        );
     final priorities = <String>{
       ..._availableValues('prioritas'),
       'Tinggi',
@@ -565,7 +591,8 @@ class _LaporanContentState extends State<_LaporanContent> {
                   label: 'Kategori',
                   hint: 'Pilih kategori',
                   value: _selectedKategori,
-                  values: categories,
+                  values: categoryLabels.keys.toList(),
+                  labels: categoryLabels,
                   onChanged: (value) =>
                       setState(() => _selectedKategori = value),
                 ),
@@ -591,7 +618,7 @@ class _LaporanContentState extends State<_LaporanContent> {
                 ),
               ),
               SizedBox(
-                width: fieldWidth,
+                width: uploadWidth,
                 child: ImageUploadField(
                   fileName: _buktiController.text,
                   bytes: _buktiBytes,
@@ -611,11 +638,24 @@ class _LaporanContentState extends State<_LaporanContent> {
             decoration: _inputDecoration(hint: 'Ringkasan perihal kendala...'),
           ),
           const SizedBox(height: 20),
+          if (!_can(_editingReport == null ? 'laporan.buat' : 'laporan.ubah'))
+            const Padding(
+              padding: EdgeInsets.only(bottom: 10),
+              child: Text(
+                'Akun Anda tidak memiliki akses untuk menyimpan laporan.',
+                style: TextStyle(fontSize: 12, color: AppColors.error),
+              ),
+            ),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
               ElevatedButton(
-                onPressed: _submitReport,
+                onPressed:
+                    _can(
+                      _editingReport == null ? 'laporan.buat' : 'laporan.ubah',
+                    )
+                    ? _submitReport
+                    : null,
                 style: AppButtons.primary,
                 child: Text(_editingReport == null ? 'Kirim' : 'Perbarui'),
               ),
@@ -702,7 +742,9 @@ class _LaporanContentState extends State<_LaporanContent> {
         report['update_by']?.toString() ??
         report['updateBy']?.toString() ??
         '-';
-    final kategori = report['id_kategori']?.toString().trim();
+    final kategori = controller.kategoriName(
+      report['id_kategori']?.toString() ?? '',
+    );
     final deadline = report['deadline']?.toString().trim();
     final isDone = status == 'Done';
     final isValidated = report['validasi_pelapor'] == true;
@@ -713,7 +755,7 @@ class _LaporanContentState extends State<_LaporanContent> {
       status: status,
       onTap: () => setState(() => _viewingReport = report),
       metaChips: [
-        if (kategori != null && kategori.isNotEmpty)
+        if (kategori.isNotEmpty && kategori != '-')
           ReportMetaChip(icon: Icons.folder_outlined, label: kategori),
         if (priority != null && priority.isNotEmpty && priority != '-')
           ReportMetaChip(
@@ -764,32 +806,35 @@ class _LaporanContentState extends State<_LaporanContent> {
         ),
       ],
       actions: [
-        if (isDone && !isValidated) _validateButton(report),
-        _cardActionButton(
-          tooltip: 'Edit laporan',
-          onPressed: () => _loadForEdit(report),
-          icon: const Icon(
-            Icons.edit_outlined,
-            size: 17,
-            color: AppColors.primary,
+        if (isDone && !isValidated && _can('laporan.validasi'))
+          _validateButton(report),
+        if (_can('laporan.ubah'))
+          _cardActionButton(
+            tooltip: 'Edit laporan',
+            onPressed: () => _loadForEdit(report),
+            icon: const Icon(
+              Icons.edit_outlined,
+              size: 17,
+              color: AppColors.primary,
+            ),
           ),
-        ),
-        PopupMenuButton<String>(
-          tooltip: 'Aksi laporan',
-          padding: EdgeInsets.zero,
-          iconSize: 18,
-          splashRadius: 16,
-          style: IconButton.styleFrom(
-            minimumSize: const Size(30, 30),
-            maximumSize: const Size(30, 30),
+        if (_can('laporan.hapus'))
+          PopupMenuButton<String>(
+            tooltip: 'Aksi laporan',
             padding: EdgeInsets.zero,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            iconSize: 18,
+            splashRadius: 16,
+            style: IconButton.styleFrom(
+              minimumSize: const Size(30, 30),
+              maximumSize: const Size(30, 30),
+              padding: EdgeInsets.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            onSelected: (_) => _confirmDelete(report),
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: 'delete', child: Text('Hapus')),
+            ],
           ),
-          onSelected: (_) => _confirmDelete(report),
-          itemBuilder: (context) => const [
-            PopupMenuItem(value: 'delete', child: Text('Hapus')),
-          ],
-        ),
       ],
     );
   }
@@ -854,39 +899,18 @@ class _LaporanContentState extends State<_LaporanContent> {
   }
 
   String _picLabel(String nik, {String? unit}) {
-    String? name;
-    String? employeeUnit = unit;
-    for (final report in controller.listLaporan) {
-      final reportPics = (report['id_nik_pic']?.toString() ?? '')
-          .split(',')
-          .map((value) => value.trim());
-      if (!reportPics.contains(nik) && report['id_nik']?.toString() != nik) {
-        continue;
-      }
-
-      for (final key in [
-        'nama_karyawan_pic',
-        'nama_pegawai_pic',
-        'nama_pic',
-        'nama_karyawan',
-        'nama_pegawai',
-      ]) {
-        final value = report[key]?.toString().trim();
-        if (value != null && value.isNotEmpty) {
-          name = value;
-          break;
-        }
-      }
-      employeeUnit ??=
-          report['nama_unit_pic']?.toString() ??
-          report['unit_pic']?.toString() ??
-          report['id_unit_pic']?.toString();
-      if (name != null && name.isNotEmpty) break;
-    }
-
-    final displayName = name?.isNotEmpty == true ? name! : nik;
-    if (employeeUnit == null || employeeUnit.isEmpty) return displayName;
-    return '$displayName - $employeeUnit';
+    final displayName = controller.userName(nik);
+    final unitId = (unit == null || unit.trim().isEmpty)
+        ? controller.employeeUnit(nik)
+        : unit;
+    final displayUnit = unitId.trim().isEmpty
+        ? ''
+        : controller.unitName(unitId);
+    final values = [
+      displayName,
+      displayUnit,
+    ].where((value) => value.trim().isNotEmpty && value != '-').toList();
+    return values.isEmpty ? nik : values.join(' - ');
   }
 
   /// Nama pelapor berdasarkan NIK. Bila nama tidak tersedia, pakai NIK.
@@ -926,7 +950,10 @@ class _LaporanContentState extends State<_LaporanContent> {
     final details = <(String, String)>[
       ('Tanggal kejadian', report['tgl_kejadian']?.toString() ?? '-'),
       ('Pelapor', _pelaporDisplay(report)),
-      ('Kategori', report['id_kategori']?.toString() ?? '-'),
+      (
+        'Kategori',
+        controller.kategoriName(report['id_kategori']?.toString() ?? ''),
+      ),
       ('PIC', _picDisplay(report)),
       ('Prioritas', report['prioritas']?.toString() ?? '-'),
       ('Deadline', report['deadline']?.toString() ?? '-'),
@@ -969,14 +996,15 @@ class _LaporanContentState extends State<_LaporanContent> {
                         ),
                       ),
                     ),
-                    IconButton(
-                      tooltip: 'Edit laporan',
-                      onPressed: () => _loadForEdit(report),
-                      icon: const Icon(
-                        Icons.edit_outlined,
-                        color: AppColors.primary,
+                    if (_can('laporan.ubah'))
+                      IconButton(
+                        tooltip: 'Edit laporan',
+                        onPressed: () => _loadForEdit(report),
+                        icon: const Icon(
+                          Icons.edit_outlined,
+                          color: AppColors.primary,
+                        ),
                       ),
-                    ),
                     _statusPill(_displayStatus(report['status']?.toString())),
                   ],
                 ),
@@ -1110,7 +1138,7 @@ class _LaporanContentState extends State<_LaporanContent> {
       return const SizedBox.shrink();
     }
     final validated = report['validasi_pelapor'] == true;
-    final canValidate = !validated;
+    final canValidate = !validated && _can('laporan.validasi');
 
     return Container(
       width: double.infinity,
@@ -1199,6 +1227,7 @@ class _LaporanContentState extends State<_LaporanContent> {
     required String? value,
     required List<String> values,
     required ValueChanged<String?> onChanged,
+    Map<String, String>? labels,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1210,7 +1239,12 @@ class _LaporanContentState extends State<_LaporanContent> {
           isExpanded: true,
           decoration: _inputDecoration(hint: hint),
           items: values
-              .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+              .map(
+                (item) => DropdownMenuItem(
+                  value: item,
+                  child: Text(labels?[item] ?? item),
+                ),
+              )
               .toList(),
           onChanged: values.isEmpty ? null : onChanged,
         ),

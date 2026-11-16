@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 
 import '../../../core/theme/app_buttons.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../data/services/master_data_store.dart';
 import '../../../global_widgets/main_layout_widget.dart';
 import '../controllers/master_role_controller.dart';
 
@@ -254,6 +255,10 @@ class _MasterRoleContentState extends State<_MasterRoleContent> {
             label: Text('Nama Role'),
             columnWidth: FlexColumnWidth(2.4),
           ),
+          DataColumn(
+            label: Text('Hak Akses'),
+            columnWidth: FlexColumnWidth(2.2),
+          ),
           DataColumn(label: Text('Dibuat'), columnWidth: FlexColumnWidth(1.3)),
           DataColumn(label: Text('Aksi'), columnWidth: FixedColumnWidth(130)),
         ],
@@ -282,6 +287,17 @@ class _MasterRoleContentState extends State<_MasterRoleContent> {
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                     color: AppColors.textStrong,
+                  ),
+                ),
+              ),
+              DataCell(
+                Text(
+                  _permissionSummary(item),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textWeak,
                   ),
                 ),
               ),
@@ -368,6 +384,11 @@ class _MasterRoleContentState extends State<_MasterRoleContent> {
             'Dibuat ${_dateText(role['created_at'])}',
             style: const TextStyle(fontSize: 11, color: AppColors.textWeak),
           ),
+          const SizedBox(height: 2),
+          Text(
+            'Hak akses: ${_permissionSummary(role)}',
+            style: const TextStyle(fontSize: 11, color: AppColors.textWeak),
+          ),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
@@ -405,6 +426,15 @@ class _MasterRoleContentState extends State<_MasterRoleContent> {
     return name.isEmpty ? 'Tanpa nama' : name;
   }
 
+  String _permissionSummary(Map<String, dynamic> role) {
+    final permissions = controller.permissionsOf(role);
+    if (permissions.isEmpty) return 'Tidak ada akses';
+    if (permissions.length == MasterDataStore.allPermissions.length) {
+      return 'Semua akses';
+    }
+    return '${permissions.length} hak akses';
+  }
+
   String _dateText(dynamic raw) {
     final date = DateTime.tryParse(raw?.toString() ?? '');
     if (date == null) return '-';
@@ -414,7 +444,7 @@ class _MasterRoleContentState extends State<_MasterRoleContent> {
   }
 
   Future<void> _openForm([Map<String, dynamic>? role]) async {
-    final result = await showDialog<Map<String, String>>(
+    final result = await showDialog<_RoleFormResult>(
       context: context,
       barrierDismissible: false,
       builder: (context) => _RoleFormDialog(
@@ -426,7 +456,8 @@ class _MasterRoleContentState extends State<_MasterRoleContent> {
 
     final error = await controller.saveRole(
       originalId: role?['id_role']?.toString(),
-      namaRole: result['nama_role'] ?? '',
+      namaRole: result.namaRole,
+      permissions: result.permissions,
     );
     if (!mounted) return;
     Get.snackbar(
@@ -512,6 +543,7 @@ class _RoleFormDialog extends StatefulWidget {
 class _RoleFormDialogState extends State<_RoleFormDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
+  final Set<String> _selectedPermissions = {};
 
   bool get _isEdit => widget.role != null;
 
@@ -526,6 +558,13 @@ class _RoleFormDialogState extends State<_RoleFormDialog> {
     _nameController = TextEditingController(
       text: widget.role?['nama_role']?.toString() ?? '',
     );
+    if (_isEdit) {
+      _selectedPermissions.addAll(
+        MasterDataStore.ensure().permissionsForRole(
+          widget.role?['id_role']?.toString() ?? '',
+        ),
+      );
+    }
   }
 
   @override
@@ -536,10 +575,12 @@ class _RoleFormDialogState extends State<_RoleFormDialog> {
 
   void _submit() {
     if (_formKey.currentState?.validate() != true) return;
-    Navigator.of(context).pop({
-      'id_role': widget.role?['id_role']?.toString() ?? '',
-      'nama_role': _nameController.text.trim(),
-    });
+    Navigator.of(context).pop(
+      _RoleFormResult(
+        namaRole: _nameController.text.trim(),
+        permissions: _selectedPermissions.toList(),
+      ),
+    );
   }
 
   @override
@@ -573,7 +614,7 @@ class _RoleFormDialogState extends State<_RoleFormDialog> {
         ],
       ),
       content: SizedBox(
-        width: 420,
+        width: 480,
         child: SingleChildScrollView(
           child: Form(
             key: _formKey,
@@ -593,21 +634,20 @@ class _RoleFormDialogState extends State<_RoleFormDialog> {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: AppColors.divider),
                   ),
-                  child: Row(
+                  child: Wrap(
+                    spacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Expanded(
-                        child: Text(
-                          _roleId,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textStrong,
-                          ),
+                      Text(
+                        _roleId,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textStrong,
                         ),
                       ),
-                      const SizedBox(width: 8),
                       Text(
                         _isEdit ? 'tidak dapat diubah' : 'dibuat otomatis',
                         style: const TextStyle(
@@ -624,18 +664,20 @@ class _RoleFormDialogState extends State<_RoleFormDialog> {
                   key: const ValueKey('role_nama_field'),
                   controller: _nameController,
                   maxLength: 50,
-                  decoration: _inputDecoration('Contoh: Administrator')
+                  decoration: _inputDecoration('Contoh: karu')
                       .copyWith(counterText: ''),
                   validator: (value) => (value == null || value.trim().isEmpty)
                       ? 'Nama role wajib diisi.'
                       : null,
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 16),
+                _fieldLabel('Hak Akses'),
                 const Text(
-                  'Role dipakai untuk menentukan hak akses pengguna pada '
-                  'aplikasi.',
+                  'Pilih menu dan tindakan yang boleh diakses role ini.',
                   style: TextStyle(fontSize: 11, color: AppColors.textWeak),
                 ),
+                const SizedBox(height: 8),
+                ..._buildPermissionPicker(),
               ],
             ),
           ),
@@ -656,6 +698,52 @@ class _RoleFormDialogState extends State<_RoleFormDialog> {
     );
   }
 
+  List<Widget> _buildPermissionPicker() {
+    final widgets = <Widget>[];
+    MasterDataStore.permissionGroups.forEach((group, items) {
+      widgets.add(
+        Padding(
+          padding: const EdgeInsets.only(top: 10, bottom: 2),
+          child: Text(
+            group,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: AppColors.primary,
+            ),
+          ),
+        ),
+      );
+      for (final item in items) {
+        final key = item['key']!;
+        final selected = _selectedPermissions.contains(key);
+        widgets.add(
+          CheckboxListTile(
+            value: selected,
+            onChanged: (value) {
+              setState(() {
+                if (value == true) {
+                  _selectedPermissions.add(key);
+                } else {
+                  _selectedPermissions.remove(key);
+                }
+              });
+            },
+            dense: true,
+            visualDensity: VisualDensity.compact,
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            title: Text(
+              item['label']!,
+              style: const TextStyle(fontSize: 12, color: AppColors.textStrong),
+            ),
+          ),
+        );
+      }
+    });
+    return widgets;
+  }
+
   Widget _fieldLabel(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
@@ -669,6 +757,13 @@ class _RoleFormDialogState extends State<_RoleFormDialog> {
       ),
     );
   }
+}
+
+class _RoleFormResult {
+  const _RoleFormResult({required this.namaRole, required this.permissions});
+
+  final String namaRole;
+  final List<String> permissions;
 }
 
 InputDecoration _inputDecoration(String hint) {

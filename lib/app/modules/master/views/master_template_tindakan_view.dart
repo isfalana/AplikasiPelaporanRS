@@ -695,21 +695,20 @@ class _TemplateFormDialogState extends State<_TemplateFormDialog> {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: AppColors.divider),
                   ),
-                  child: Row(
+                  child: Wrap(
+                    spacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Expanded(
-                        child: Text(
-                          _templateId,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textStrong,
-                          ),
+                      Text(
+                        _templateId,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textStrong,
                         ),
                       ),
-                      const SizedBox(width: 8),
                       Text(
                         _isEdit ? 'tidak dapat diubah' : 'dibuat otomatis',
                         style: const TextStyle(

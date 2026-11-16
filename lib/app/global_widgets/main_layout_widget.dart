@@ -30,9 +30,9 @@ class MainLayoutWidget extends StatelessWidget {
           return Scaffold(
             backgroundColor: AppColors.surface,
             appBar: SidebarWidget.mobileAppBar(
-            title: title,
-            actions: desktopActions,
-          ),
+              title: title,
+              actions: desktopActions,
+            ),
             drawer: SidebarWidget.mobileDrawer(
               child: _buildSidebar(
                 dashboardController,
@@ -138,6 +138,7 @@ class MainLayoutWidget extends StatelessWidget {
         unitName: dashboardController.unitName.value,
         employeeName: dashboardController.employeeName.value,
         isMasterExpanded: dashboardController.isMasterExpanded.value,
+        permissions: dashboardController.permissions,
         onLogout: dashboardController.logout,
         onMasterMenuTap: () {
           if (isCollapsed) {

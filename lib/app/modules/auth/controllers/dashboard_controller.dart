@@ -1,6 +1,7 @@
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../data/services/master_data_store.dart';
 import '../../laporan/controllers/laporan_controller.dart';
 import '../../../routes/app_pages.dart';
 
@@ -23,8 +24,27 @@ class DashboardController extends GetxController {
 
   var unitName = ''.obs;
   var employeeName = ''.obs;
+  var activeNik = ''.obs;
   var isSidebarCollapsed = false.obs;
   var isMasterExpanded = true.obs;
+
+  /// Hak akses akun yang sedang login.
+  ///
+  /// Selama NIK belum termuat (misalnya sesaat setelah halaman dibuka), semua
+  /// menu ditampilkan agar aplikasi tidak "berkedip". Setelah NIK terbaca,
+  /// daftar ini mengikuti permission role pada Master Role.
+  Set<String> get permissions {
+    final nik = activeNik.value.trim();
+    if (nik.isEmpty) return Set<String>.from(MasterDataStore.allPermissions);
+    return MasterDataStore.ensure().permissionsForEmployee(nik);
+  }
+
+  /// Apakah akun yang sedang login memiliki hak akses [permission].
+  bool can(String permission) {
+    final current = permissions;
+    return current.contains(MasterDataStore.wildcardPermission) ||
+        current.contains(permission);
+  }
 
   // List data laporan berasal dari controller bersama.
   List<Map<String, dynamic>> get listLaporan => laporanController.listLaporan;
@@ -51,6 +71,7 @@ class DashboardController extends GetxController {
 
   void loadUserData() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
+    activeNik.value = prefs.getString('id_nik') ?? '';
     unitName.value = prefs.getString('unit_name') ?? 'Unit';
     employeeName.value = _readEmployeeName(prefs);
   }

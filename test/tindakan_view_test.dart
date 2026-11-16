@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+
 import 'package:aplikasilaporan/app/routes/app_pages.dart';
+import 'package:aplikasilaporan/app/global_widgets/bukti_preview.dart';
 import 'package:aplikasilaporan/app/global_widgets/report_style_card.dart';
 import 'package:aplikasilaporan/app/modules/laporan/controllers/laporan_controller.dart';
 import 'package:aplikasilaporan/app/modules/tindakan/controllers/tindakan_controller.dart';
@@ -32,6 +35,8 @@ void main() {
 
     expect(find.text('Kerusakan AC Ruang IGD'), findsNWidgets(2));
     expect(find.text('Permintaan Perbaikan Jaringan LAN'), findsNothing);
+    expect(find.text('permasalahan'), findsWidgets);
+    expect(find.text('KAT-01'), findsNothing);
     expect(find.text('Daftar Tindakan'), findsOneWidget);
     expect(find.byType(TextField), findsNWidgets(2));
     final cardTitleFinder = find.text('Kerusakan AC Ruang IGD').last;
@@ -55,6 +60,7 @@ void main() {
           widget.decoration?.hintText == 'Tuliskan langkah tindak lanjut...',
     );
     await tester.enterText(actionField, 'Memeriksa unit AC');
+    await tester.ensureVisible(find.text('Tambah'));
     await tester.tap(find.text('Tambah'));
     await tester.pump();
     expect(find.text('Memeriksa unit AC'), findsOneWidget);
@@ -109,6 +115,108 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets('form Tindakan menampilkan bukti laporan dari pelapor', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(Get.reset);
+
+    final laporanController = Get.put(LaporanController(), permanent: true);
+    final report = laporanController.listLaporan.first;
+    report['bukti'] = 'bukti_kerusakan.pdf';
+    report['bukti_bytes'] = Uint8List.fromList([1, 2, 3, 4]);
+
+    await tester.pumpWidget(
+      GetMaterialApp(initialRoute: Routes.TINDAKAN, getPages: AppPages.routes),
+    );
+    await tester.pump(const Duration(seconds: 2));
+
+    expect(find.text('Bukti laporan pelapor'), findsOneWidget);
+    expect(find.text('Bukti laporan'), findsNothing);
+    expect(find.text('bukti_kerusakan.pdf'), findsWidgets);
+    expect(find.byType(BuktiPreviewTile), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('hanya PIC yang melihat pesan tindakan', (tester) async {
+    tester.view.physicalSize = const Size(1440, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(Get.reset);
+
+    final laporanController = Get.put(LaporanController(), permanent: true);
+    laporanController.listLaporan.insert(0, {
+      'id_laporan': 'LAP-PIC-IT',
+      'tgl_laporan': '2026-11-16',
+      'tgl_kejadian': '2026-11-16',
+      'deadline': '2026-11-17',
+      'id_nik_pelapor': 'NIK-002',
+      'nama_pelapor': 'Rina Kartika',
+      'id_unit_pelapor': 'UNIT-UMUM',
+      'nama_unit_pelapor': 'Unit Umum',
+      'id_kategori': 'KAT-01',
+      'id_nik_pic': 'NIK-004',
+      'id_unit_pic': 'UNIT-IT',
+      'id_tindak_lanjut': 'TL-04',
+      'perihal': 'Laporan hanya untuk unit IT',
+      'prioritas': 'Tinggi',
+      'status': 'Open',
+    });
+    laporanController.listLaporan.refresh();
+
+    await tester.pumpWidget(
+      GetMaterialApp(initialRoute: Routes.TINDAKAN, getPages: AppPages.routes),
+    );
+    await tester.pump(const Duration(seconds: 2));
+
+    expect(find.text('Laporan hanya untuk unit IT'), findsNothing);
+    expect(find.text('Kerusakan AC Ruang IGD'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('ID tindak lanjut terisi otomatis untuk laporan baru', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(Get.reset);
+
+    final laporanController = Get.put(LaporanController(), permanent: true);
+    laporanController.listLaporan.insert(0, {
+      'id_laporan': 'LAP-BARU',
+      'tgl_laporan': '2026-11-16',
+      'tgl_kejadian': '2026-11-16',
+      'deadline': '2026-11-17',
+      'id_nik_pelapor': 'NIK-001',
+      'nama_pelapor': 'dr. Enung Sp.PD',
+      'id_unit_pelapor': 'UNIT-IGD',
+      'nama_unit_pelapor': 'Instalasi Gawat Darurat',
+      'id_kategori': 'KAT-01',
+      'id_nik_pic': 'NIK-002',
+      'id_tindak_lanjut': null,
+      'perihal': 'Laporan baru tanpa ID tindak lanjut',
+      'prioritas': 'Sedang',
+      'status': 'Open',
+    });
+    laporanController.listLaporan.refresh();
+
+    await tester.pumpWidget(
+      GetMaterialApp(initialRoute: Routes.TINDAKAN, getPages: AppPages.routes),
+    );
+    await tester.pump(const Duration(seconds: 2));
+
+    expect(find.text('Laporan baru tanpa ID tindak lanjut'), findsWidgets);
+    expect(find.text('TL-03'), findsWidgets);
+    expect(laporanController.listLaporan.first['id_tindak_lanjut'], 'TL-03');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('sidebar opens the Tindakan page', (tester) async {
     tester.view.physicalSize = const Size(1024, 800);
     tester.view.devicePixelRatio = 1;
@@ -150,6 +258,86 @@ void main() {
     final reportDate = tester.getRect(find.text('Tanggal laporan').first);
     expect(reportId.top, closeTo(reportDate.top, 1));
     expect(reportId.left, lessThan(reportDate.left));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('informasi laporan menampilkan tanggal dan deadline', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(Get.reset);
+
+    await tester.pumpWidget(
+      GetMaterialApp(initialRoute: Routes.TINDAKAN, getPages: AppPages.routes),
+    );
+    await tester.pump(const Duration(seconds: 2));
+
+    expect(find.text('Tanggal laporan'), findsWidgets);
+    expect(find.text('Deadline'), findsWidgets);
+    expect(find.text('09/11/2026'), findsWidgets);
+    expect(find.text('11/11/2026'), findsWidgets);
+    expect(find.text('2026-11-09'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('laporan baru dari halaman Laporan muncul di Tindakan', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(Get.reset);
+
+    final laporanController = Get.put(LaporanController(), permanent: true);
+
+    await tester.pumpWidget(
+      GetMaterialApp(initialRoute: Routes.LAPORAN, getPages: AppPages.routes),
+    );
+    await tester.pump(const Duration(seconds: 2));
+
+    await tester.enterText(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is TextField &&
+            widget.decoration?.hintText == 'Ringkasan perihal kendala...',
+      ),
+      'Laporan uji muncul di tindakan',
+    );
+
+    final dropdowns = find.byType(DropdownButtonFormField<String>);
+    await tester.ensureVisible(dropdowns.at(0));
+    await tester.pumpAndSettle();
+    await tester.tap(dropdowns.at(0));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('permasalahan').last);
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(dropdowns.at(1));
+    await tester.pumpAndSettle();
+    await tester.tap(dropdowns.at(1));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('Rina Kartika').last);
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Kirim'));
+    await tester.tap(find.text('Kirim'));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+
+    final created = laporanController.listLaporan.first;
+    expect(created['perihal'], 'Laporan uji muncul di tindakan');
+    expect(created['id_nik_pic'], 'NIK-002');
+
+    Get.offNamed(Routes.TINDAKAN);
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 2));
+
+    expect(find.text('Laporan uji muncul di tindakan'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 }

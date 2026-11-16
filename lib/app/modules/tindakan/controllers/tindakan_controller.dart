@@ -42,9 +42,24 @@ class TindakanController extends GetxController {
   ///
   /// Semua status tetap ditampilkan (Open, On Progress, maupun Done) agar
   /// penindak masih bisa melihat riwayat tindakan yang sudah selesai.
+  /// Hanya PIC (atau unit PIC) yang menerima pesan tindakan; unit lain,
+  /// termasuk unit pembuat laporan, tidak melihat laporan ini.
   List<Map<String, dynamic>> get reportsForCurrentUser {
+    if (!canView) return [];
     final reports = laporanController.listLaporan;
-    return reports.where(_isAssignedToCurrentUser).toList();
+    return reports.where(_isPicOfCurrentUser).toList();
+  }
+
+  /// Apakah akun ini boleh membuka halaman tindakan.
+  bool get canView => _hasPermission('tindakan.lihat');
+
+  /// Apakah akun ini boleh menyimpan tindak lanjut.
+  bool get canUpdate => _hasPermission('tindakan.ubah');
+
+  bool _hasPermission(String permission) {
+    final nik = activeNik.value.trim();
+    if (nik.isEmpty) return true;
+    return laporanController.master.hasPermission(nik, permission);
   }
 
   @override
@@ -202,6 +217,17 @@ class TindakanController extends GetxController {
     return values.isEmpty ? '-' : values.join(' · ');
   }
 
+  /// Label kategori laporan. Menampilkan nama kategori, bukan ID, dengan
+  /// mengambil data terbaru dari Master Kategori.
+  String kategoriLabel(Map<String, dynamic> report) {
+    final raw =
+        report['id_kategori'] ?? report['kategori'] ?? report['nama_kategori'];
+    final value = raw?.toString().trim() ?? '';
+    if (value.isEmpty) return '-';
+    final name = laporanController.kategoriName(value);
+    return name.trim().isEmpty ? value : name;
+  }
+
   /// Label penanggung jawab perubahan tindak lanjut terakhir:
   /// "Nama · Unit". Dipakai pada kolom "Last update by".
   String updaterLabel() {
@@ -219,7 +245,7 @@ class TindakanController extends GetxController {
     return values.isEmpty ? '-' : values.join(' · ');
   }
 
-  bool _isAssignedToCurrentUser(Map<String, dynamic> report) {
+  bool _isPicOfCurrentUser(Map<String, dynamic> report) {
     final nik = activeNik.value.trim().toLowerCase();
     final assignedNiks = (report['id_nik_pic']?.toString() ?? '')
         .split(',')
@@ -252,6 +278,9 @@ class TindakanController extends GetxController {
   }
 
   void selectReport(Map<String, dynamic> report) {
+    // ID tindak lanjut diisi otomatis saat laporan pertama kali dibuka,
+    // sehingga form tidak menampilkan tanda "-".
+    _ensureTindakLanjutId(report);
     selectedReport.value = report;
     actionInputController.clear();
     final reportId = report['id_laporan']?.toString() ?? '';
@@ -277,6 +306,32 @@ class TindakanController extends GetxController {
     buktiTindakanName.value = report['bukti_tindakan']?.toString() ?? '';
     final savedBukti = report['bukti_tindakan_bytes'];
     buktiTindakanBytes.value = savedBukti is Uint8List ? savedBukti : null;
+  }
+
+  /// Pastikan laporan punya ID tindak lanjut.
+  ///
+  /// Bila laporan baru belum memiliki ID, buat ID berikutnya dari data yang
+  /// sudah ada (misalnya `TL-03`) lalu simpan pada laporan tersebut agar tidak
+  /// berubah saat laporan dibuka kembali.
+  void _ensureTindakLanjutId(Map<String, dynamic> report) {
+    final current = report['id_tindak_lanjut']?.toString().trim() ?? '';
+    if (current.isNotEmpty && current != '-') return;
+    report['id_tindak_lanjut'] = _nextTindakLanjutId();
+  }
+
+  String _nextTindakLanjutId() {
+    final used = <int>{};
+    for (final report in laporanController.listLaporan) {
+      final value = report['id_tindak_lanjut']?.toString().trim().toUpperCase();
+      final match = RegExp(r'^TL-(\d+)$').firstMatch(value ?? '');
+      final number = int.tryParse(match?.group(1) ?? '');
+      if (number != null) used.add(number);
+    }
+    var next = 1;
+    while (used.contains(next)) {
+      next++;
+    }
+    return 'TL-${next.toString().padLeft(2, '0')}';
   }
 
   List<Map<String, dynamic>> _detailsFromReport(dynamic value) {
@@ -369,7 +424,10 @@ class TindakanController extends GetxController {
   String? saveAction() {
     final report = selectedReport.value;
     if (report == null) return 'Pilih laporan yang akan ditindaklanjuti.';
-    if (!_isAssignedToCurrentUser(report)) {
+    if (!canUpdate) {
+      return 'Akun Anda tidak memiliki akses untuk menyimpan tindak lanjut.';
+    }
+    if (!_isPicOfCurrentUser(report)) {
       return 'Laporan ini bukan tanggung jawab PIC akun Anda.';
     }
     if (actionItems.isEmpty) {
@@ -405,7 +463,19 @@ class TindakanController extends GetxController {
     report['status'] = selectedStatus.value;
     // Catat siapa (nama + unit) yang terakhir mengubah tindak lanjut ini.
     report['last_update_by'] = updaterLabel();
+    // Catat tanggal mulai tindak lanjut saat tindakan pertama disimpan dan
+    // tanggal selesai saat penindak menandai laporan Done, supaya kolom pada
+    // halaman Report terisi.
+    final today = _dateText(DateTime.now());
+    final startedAt = report['tgl_mulai_tindakan']?.toString().trim() ?? '';
+    if (startedAt.isEmpty || startedAt == '-') {
+      report['tgl_mulai_tindakan'] = today;
+    }
     if (selectedStatus.value == 'Done') {
+      final finishedAt = report['tgl_selesai']?.toString().trim() ?? '';
+      if (finishedAt.isEmpty || finishedAt == '-') {
+        report['tgl_selesai'] = today;
+      }
       // Laporan yang ditandai Done oleh penindak menunggu validasi pelapor.
       report['validasi_pelapor'] = false;
       report['tgl_validasi'] = null;
