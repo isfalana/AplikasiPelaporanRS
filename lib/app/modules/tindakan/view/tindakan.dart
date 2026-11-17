@@ -135,6 +135,8 @@ class _TindakanContent extends GetView<TindakanController> {
           ? report['bukti_bytes'] as Uint8List
           : null;
       final hasBukti = buktiName.isNotEmpty || buktiBytes != null;
+      // Laporan Done bersifat final: seluruh kontrol tindak lanjut dikunci.
+      final isLocked = controller.isReportDone(report);
 
       return Container(
         width: double.infinity,
@@ -185,6 +187,44 @@ class _TindakanContent extends GetView<TindakanController> {
               ),
               const SizedBox(height: 6),
               BuktiPreviewTile(fileName: buktiName, bytes: buktiBytes),
+            ],
+            if (isLocked) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.success.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: AppColors.success.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.lock_outline_rounded,
+                      size: 16,
+                      color: AppColors.success,
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Laporan ini sudah Done. Data tindak lanjut tidak '
+                        'dapat diubah lagi.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textStrong,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
             const Divider(height: 28),
             const Text(
@@ -303,14 +343,18 @@ class _TindakanContent extends GetView<TindakanController> {
                                 )
                                 .where((item) => item.value != null)
                                 .toList(),
-                            onChanged: (value) {
-                              controller.selectedTemplateId.value = value;
-                            },
+                            onChanged: isLocked
+                                ? null
+                                : (value) {
+                                    controller.selectedTemplateId.value = value;
+                                  },
                           ),
                         ),
                         const SizedBox(width: 8),
                         ElevatedButton(
-                          onPressed: selectedId == null ? null : _applyTemplate,
+                          onPressed: isLocked || selectedId == null
+                              ? null
+                              : _applyTemplate,
                           style: AppButtons.primary,
                           child: const Text('Terapkan'),
                         ),
@@ -357,6 +401,7 @@ class _TindakanContent extends GetView<TindakanController> {
                 Expanded(
                   child: TextField(
                     controller: controller.actionInputController,
+                    enabled: !isLocked,
                     onSubmitted: (_) => _addActionItem(),
                     decoration: _inputDecoration(
                       hint: 'Tuliskan langkah tindak lanjut...',
@@ -365,7 +410,7 @@ class _TindakanContent extends GetView<TindakanController> {
                 ),
                 const SizedBox(width: 8),
                 OutlinedButton.icon(
-                  onPressed: _addActionItem,
+                  onPressed: isLocked ? null : _addActionItem,
                   icon: const Icon(Icons.add, size: 18),
                   label: const Text('Tambah'),
                   style: AppButtons.outlined,
@@ -404,8 +449,12 @@ class _TindakanContent extends GetView<TindakanController> {
                         Checkbox(
                           value: isDone,
                           activeColor: AppColors.primary,
-                          onChanged: (value) =>
-                              controller.toggleActionItem(index, value),
+                          onChanged: isLocked
+                              ? null
+                              : (value) => controller.toggleActionItem(
+                                  index,
+                                  value,
+                                ),
                         ),
                         Expanded(
                           child: Text(
@@ -423,7 +472,9 @@ class _TindakanContent extends GetView<TindakanController> {
                         ),
                         IconButton(
                           tooltip: 'Hapus tindak lanjut',
-                          onPressed: () => controller.removeActionItem(index),
+                          onPressed: isLocked
+                              ? null
+                              : () => controller.removeActionItem(index),
                           icon: const Icon(
                             Icons.close,
                             size: 18,
@@ -448,20 +499,27 @@ class _TindakanContent extends GetView<TindakanController> {
             const SizedBox(height: 6),
             TextField(
               controller: controller.noteController,
+              enabled: !isLocked,
               maxLines: 3,
               decoration: _inputDecoration(
                 hint: 'Tuliskan keterangan tindak lanjut...',
               ),
             ),
             const SizedBox(height: 14),
-            ImageUploadField(
-              label: 'Upload bukti tindak lanjut',
-              fileName: controller.buktiTindakanName.value,
-              bytes: controller.buktiTindakanBytes.value,
-              onChanged: (name, bytes) {
-                controller.buktiTindakanName.value = name;
-                controller.buktiTindakanBytes.value = bytes;
-              },
+            IgnorePointer(
+              ignoring: isLocked,
+              child: Opacity(
+                opacity: isLocked ? 0.6 : 1,
+                child: ImageUploadField(
+                  label: 'Upload bukti tindak lanjut',
+                  fileName: controller.buktiTindakanName.value,
+                  bytes: controller.buktiTindakanBytes.value,
+                  onChanged: (name, bytes) {
+                    controller.buktiTindakanName.value = name;
+                    controller.buktiTindakanBytes.value = bytes;
+                  },
+                ),
+              ),
             ),
             const SizedBox(height: 16),
             Wrap(
@@ -508,16 +566,19 @@ class _TindakanContent extends GetView<TindakanController> {
                                 child: const Text('Done'),
                               ),
                             ],
-                            onChanged: (value) {
-                              if (value != null) {
-                                controller.selectedStatus.value = value;
-                              }
-                            },
+                            onChanged: isLocked
+                                ? null
+                                : (value) {
+                                    if (value != null) {
+                                      controller.selectedStatus.value = value;
+                                    }
+                                  },
                           ),
                         ),
                       ],
                     ),
-                    if (controller.actionItems.isNotEmpty &&
+                    if (!isLocked &&
+                        controller.actionItems.isNotEmpty &&
                         !controller.allActionsComplete)
                       const Padding(
                         padding: EdgeInsets.only(top: 6),
@@ -533,7 +594,9 @@ class _TindakanContent extends GetView<TindakanController> {
                   ],
                 ),
                 ElevatedButton(
-                  onPressed: controller.canUpdate ? _saveAction : null,
+                  onPressed: controller.canUpdate && !isLocked
+                      ? _saveAction
+                      : null,
                   style: AppButtons.primary,
                   child: const Text('Kirim Tindakan'),
                 ),
