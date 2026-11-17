@@ -37,7 +37,7 @@ void main() {
     expect(find.text('Rina Kartika'), findsOneWidget);
     expect(find.text('Andi Pratama'), findsOneWidget);
     expect(find.text('Unit Umum'), findsOneWidget);
-    expect(find.text('Administrator'), findsOneWidget);
+    expect(find.text('superadmin'), findsWidgets);
     expect(find.text('Tambah Karyawan'), findsOneWidget);
 
     // Password dan token perangkat tidak boleh tampil di halaman.
@@ -52,7 +52,7 @@ void main() {
     expect(find.text('Rina Kartika'), findsNothing);
 
     // Pencarian berdasarkan nama role.
-    await tester.enterText(find.byType(TextField), 'dokter');
+    await tester.enterText(find.byType(TextField), 'karu');
     await tester.pump();
 
     expect(find.text('dr. Enung Sp.PD'), findsOneWidget);
@@ -112,7 +112,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('karyawan_role_dropdown')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Administrator').last);
+    await tester.tap(find.text('karu').last);
     await tester.pumpAndSettle();
 
     // Password wajib untuk karyawan baru.

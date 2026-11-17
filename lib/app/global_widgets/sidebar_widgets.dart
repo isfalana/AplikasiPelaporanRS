@@ -43,6 +43,7 @@ class SidebarWidget extends StatelessWidget {
     required this.unitName,
     required this.employeeName,
     required this.isMasterExpanded,
+    required this.permissions,
     required this.onMasterMenuTap,
     required this.onLogout,
     super.key,
@@ -54,8 +55,21 @@ class SidebarWidget extends StatelessWidget {
   final String unitName;
   final String employeeName;
   final bool isMasterExpanded;
+  final Set<String> permissions;
   final VoidCallback onMasterMenuTap;
   final VoidCallback onLogout;
+
+  bool _can(String permission) {
+    return permissions.contains(permission) || permissions.contains('*');
+  }
+
+  bool get _canViewMaster {
+    return _can('master.unit') ||
+        _can('master.karyawan') ||
+        _can('master.kategori') ||
+        _can('master.template') ||
+        _can('master.role');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -130,42 +144,47 @@ class SidebarWidget extends StatelessWidget {
                 ),
               ),
             ),
-          _buildSidebarItem(
-            icon: Icons.send_outlined,
-            title: 'Laporan',
-            isSelected: currentRoute == Routes.LAPORAN,
-            isCollapsed: isCollapsed,
-            onTap: _openReports,
-          ),
-          _buildSidebarItem(
-            icon: Icons.task_alt_outlined,
-            title: 'Tindakan',
-            isSelected: currentRoute == Routes.TINDAKAN,
-            isCollapsed: isCollapsed,
-            onTap: _openActions,
-          ),
-          _buildSidebarItem(
-            icon: Icons.assessment_outlined,
-            title: 'Report',
-            isSelected: currentRoute == Routes.REPORT,
-            isCollapsed: isCollapsed,
-            onTap: _openReport,
-          ),
-          const SizedBox(height: 18),
-          if (!isCollapsed)
-            const Padding(
-              padding: EdgeInsets.fromLTRB(22, 0, 16, 8),
-              child: Text(
-                'PENGELOLAAN',
-                style: TextStyle(
-                  color: AppColors.accent,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.1,
+          if (_can('laporan.lihat'))
+            _buildSidebarItem(
+              icon: Icons.send_outlined,
+              title: 'Laporan',
+              isSelected: currentRoute == Routes.LAPORAN,
+              isCollapsed: isCollapsed,
+              onTap: _openReports,
+            ),
+          if (_can('tindakan.lihat'))
+            _buildSidebarItem(
+              icon: Icons.task_alt_outlined,
+              title: 'Tindakan',
+              isSelected: currentRoute == Routes.TINDAKAN,
+              isCollapsed: isCollapsed,
+              onTap: _openActions,
+            ),
+          if (_can('report.lihat'))
+            _buildSidebarItem(
+              icon: Icons.assessment_outlined,
+              title: 'Report',
+              isSelected: currentRoute == Routes.REPORT,
+              isCollapsed: isCollapsed,
+              onTap: _openReport,
+            ),
+          if (_canViewMaster) ...[
+            const SizedBox(height: 18),
+            if (!isCollapsed)
+              const Padding(
+                padding: EdgeInsets.fromLTRB(22, 0, 16, 8),
+                child: Text(
+                  'PENGELOLAAN',
+                  style: TextStyle(
+                    color: AppColors.accent,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.1,
+                  ),
                 ),
               ),
-            ),
-          _buildMasterMenu(),
+            _buildMasterMenu(),
+          ],
           const Spacer(),
           PopupMenuButton<String>(
             tooltip: 'Menu akun',
@@ -413,32 +432,37 @@ class SidebarWidget extends StatelessWidget {
           onTap: onMasterMenuTap,
         ),
         if (isMasterExpanded && !isCollapsed) ...[
-          _buildMasterSubmenu(
-            'Master Unit',
-            isSelected: currentRoute == Routes.MASTER_UNIT,
-            onTap: _openMasterUnit,
-          ),
-          _buildMasterSubmenu(
-            'Master Karyawan',
-            isSelected: currentRoute == Routes.MASTER_KARYAWAN,
-            onTap: _openMasterKaryawan,
-          ),
-          _buildMasterSubmenu(
-            'Master Kategori',
-            isSelected: currentRoute == Routes.MASTER_KATEGORI,
-            onTap: _openMasterKategori,
-          ),
-          _buildMasterSubmenu(
-            'Master Template Tindakan',
-            isSelected: currentRoute == Routes.MASTER_TEMPLATE_TINDAKAN,
-            onTap: _openMasterTemplateTindakan,
-          ),
+          if (_can('master.unit'))
+            _buildMasterSubmenu(
+              'Master Unit',
+              isSelected: currentRoute == Routes.MASTER_UNIT,
+              onTap: _openMasterUnit,
+            ),
+          if (_can('master.karyawan'))
+            _buildMasterSubmenu(
+              'Master Karyawan',
+              isSelected: currentRoute == Routes.MASTER_KARYAWAN,
+              onTap: _openMasterKaryawan,
+            ),
+          if (_can('master.kategori'))
+            _buildMasterSubmenu(
+              'Master Kategori',
+              isSelected: currentRoute == Routes.MASTER_KATEGORI,
+              onTap: _openMasterKategori,
+            ),
+          if (_can('master.template'))
+            _buildMasterSubmenu(
+              'Master Template Tindakan',
+              isSelected: currentRoute == Routes.MASTER_TEMPLATE_TINDAKAN,
+              onTap: _openMasterTemplateTindakan,
+            ),
           // _buildMasterSubmenu('Master Tindak Lanjut'),
-          _buildMasterSubmenu(
-            'Master Role',
-            isSelected: currentRoute == Routes.MASTER_ROLE,
-            onTap: _openMasterRole,
-          ),
+          if (_can('master.role'))
+            _buildMasterSubmenu(
+              'Master Role',
+              isSelected: currentRoute == Routes.MASTER_ROLE,
+              onTap: _openMasterRole,
+            ),
         ],
       ],
     );

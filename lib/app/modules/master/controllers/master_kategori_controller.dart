@@ -2,15 +2,21 @@ import 'package:dio/dio.dart';
 import 'package:get/get.dart';
 
 import '../../../data/services/api_services.dart';
+import '../../../data/services/master_data_store.dart';
 
 /// Controller halaman Master Kategori.
 ///
 /// Data diambil dari endpoint `/kategori` pada backend. Bila server belum
-/// terhubung, halaman memakai data contoh supaya tetap bisa dipakai.
+/// terhubung, halaman memakai data contoh dari [MasterDataStore] supaya tetap
+/// bisa dipakai dan tetap terhubung dengan halaman Laporan/Report.
 class MasterKategoriController extends GetxController {
   static const _endpoint = '/kategori';
 
-  final listKategori = <Map<String, dynamic>>[].obs;
+  MasterDataStore get _store => MasterDataStore.ensure();
+
+  /// Daftar kategori milik store bersama, dipakai juga oleh form Laporan.
+  RxList<Map<String, dynamic>> get listKategori => _store.listKategori;
+
   final isLoading = false.obs;
   final isSaving = false.obs;
   final usingDemoData = false.obs;
@@ -165,10 +171,9 @@ class MasterKategoriController extends GetxController {
 
   void _useDemoData() {
     usingDemoData.value = true;
-    if (listKategori.isEmpty) {
-      listKategori.assignAll(_demoKategori());
-      _sort();
-    }
+    // Data contoh sudah disemai oleh MasterDataStore. Jangan menimpa data
+    // yang mungkin baru ditambahkan pengguna saat server tidak tersedia.
+    _sort();
   }
 
   void _sort() {
@@ -225,35 +230,5 @@ class MasterKategoriController extends GetxController {
       DioExceptionType.sendTimeout => 'Tidak dapat terhubung ke server.',
       _ => fallback,
     };
-  }
-
-  List<Map<String, dynamic>> _demoKategori() {
-    return [
-      {
-        'id_kategori': 'KAT-01',
-        'jenis_kategori': 'Kelistrikan',
-        'created_at': '2026-10-02T08:15:00',
-      },
-      {
-        'id_kategori': 'KAT-02',
-        'jenis_kategori': 'Jaringan & Internet',
-        'created_at': '2026-10-02T08:20:00',
-      },
-      {
-        'id_kategori': 'KAT-03',
-        'jenis_kategori': 'Pendingin Ruangan',
-        'created_at': '2026-10-03T09:05:00',
-      },
-      {
-        'id_kategori': 'KAT-04',
-        'jenis_kategori': 'Fasilitas Umum',
-        'created_at': '2026-10-04T10:40:00',
-      },
-      {
-        'id_kategori': 'KAT-05',
-        'jenis_kategori': 'Kebersihan',
-        'created_at': '2026-10-05T13:25:00',
-      },
-    ];
   }
 }

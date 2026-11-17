@@ -1,9 +1,12 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../controllers/tindakan_controller.dart';
 import '../../../core/theme/app_buttons.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../global_widgets/bukti_preview.dart';
 import '../../../global_widgets/filter_menu_button.dart';
 import '../../../global_widgets/image_upload_field.dart';
 import '../../../global_widgets/main_layout_widget.dart';
@@ -85,13 +88,36 @@ class _TindakanContent extends GetView<TindakanController> {
 
       final details = <(String, String)>[
         ('ID laporan', _value(report, 'id_laporan')),
-        ('Tanggal laporan', _value(report, 'tgl_laporan', 'tanggal_laporan')),
-        ('Tanggal kejadian', _value(report, 'tgl_kejadian')),
-        ('Deadline', _value(report, 'deadline')),
+        (
+          'Tanggal laporan',
+          _displayDate(
+            _reportValue(report, [
+              'tgl_laporan',
+              'tanggal_laporan',
+              'created_at',
+            ]),
+          ),
+        ),
+        (
+          'Tanggal kejadian',
+          _displayDate(
+            _reportValue(report, ['tgl_kejadian', 'tanggal_kejadian']),
+          ),
+        ),
+        (
+          'Deadline',
+          _displayDate(
+            _reportValue(report, [
+              'deadline',
+              'tgl_deadline',
+              'tanggal_deadline',
+            ]),
+          ),
+        ),
         ('ID tindak lanjut', _value(report, 'id_tindak_lanjut')),
         ('Perihal', _value(report, 'perihal')),
         ('Pelapor', controller.reporterLabel(report)),
-        ('Kategori', _value(report, 'id_kategori', 'kategori')),
+        ('Kategori', controller.kategoriLabel(report)),
         (
           'PIC',
           [
@@ -100,8 +126,15 @@ class _TindakanContent extends GetView<TindakanController> {
           ].where((value) => value != '-').join(' - '),
         ),
         ('Prioritas', _value(report, 'prioritas')),
-        ('Bukti laporan', _value(report, 'bukti', 'file_lampiran')),
       ];
+
+      // Satu-satunya bukti pada form ini adalah bukti dari pelapor.
+      final buktiName =
+          (report['bukti'] ?? report['file_lampiran'])?.toString().trim() ?? '';
+      final buktiBytes = report['bukti_bytes'] is Uint8List
+          ? report['bukti_bytes'] as Uint8List
+          : null;
+      final hasBukti = buktiName.isNotEmpty || buktiBytes != null;
 
       return Container(
         width: double.infinity,
@@ -140,6 +173,19 @@ class _TindakanContent extends GetView<TindakanController> {
                 );
               },
             ),
+            if (hasBukti) ...[
+              const SizedBox(height: 12),
+              const Text(
+                'Bukti laporan pelapor',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textWeak,
+                ),
+              ),
+              const SizedBox(height: 6),
+              BuktiPreviewTile(fileName: buktiName, bytes: buktiBytes),
+            ],
             const Divider(height: 28),
             const Text(
               'Tindak Lanjut',
@@ -424,40 +470,70 @@ class _TindakanContent extends GetView<TindakanController> {
               alignment: WrapAlignment.spaceBetween,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 8,
-                  crossAxisAlignment: WrapCrossAlignment.center,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text(
-                      'Status',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                      ),
-                    ),
-                    Obx(
-                      () => DropdownButton<String>(
-                        value: controller.selectedStatus.value,
-                        items: const [
-                          DropdownMenuItem(value: 'Open', child: Text('Open')),
-                          DropdownMenuItem(
-                            value: 'On Progress',
-                            child: Text('On Progress'),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        const Text(
+                          'Status',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
                           ),
-                          DropdownMenuItem(value: 'Done', child: Text('Done')),
-                        ],
-                        onChanged: (value) {
-                          if (value != null) {
-                            controller.selectedStatus.value = value;
-                          }
-                        },
-                      ),
+                        ),
+                        Obx(
+                          () => DropdownButton<String>(
+                            value: controller.selectedStatus.value,
+                            items: [
+                              const DropdownMenuItem(
+                                value: 'Open',
+                                child: Text('Open'),
+                              ),
+                              const DropdownMenuItem(
+                                value: 'On Progress',
+                                child: Text('On Progress'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'Done',
+                                // Done hanya bisa dipilih setelah semua
+                                // tindakan dicentang selesai.
+                                enabled:
+                                    controller.allActionsComplete ||
+                                    controller.selectedStatus.value == 'Done',
+                                child: const Text('Done'),
+                              ),
+                            ],
+                            onChanged: (value) {
+                              if (value != null) {
+                                controller.selectedStatus.value = value;
+                              }
+                            },
+                          ),
+                        ),
+                      ],
                     ),
+                    if (controller.actionItems.isNotEmpty &&
+                        !controller.allActionsComplete)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 6),
+                        child: Text(
+                          'Centang semua tindakan sebelum mengubah status '
+                          'menjadi Done.',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textWeak,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
                 ElevatedButton(
-                  onPressed: _saveAction,
+                  onPressed: controller.canUpdate ? _saveAction : null,
                   style: AppButtons.primary,
                   child: const Text('Kirim Tindakan'),
                 ),
@@ -604,6 +680,7 @@ class _ReportList extends GetView<TindakanController> {
                     child: _ReportCard(
                       report: report,
                       reporter: controller.reporterLabel(report),
+                      kategori: controller.kategoriLabel(report),
                       onTap: () => controller.selectReport(report),
                     ),
                   ),
@@ -620,11 +697,13 @@ class _ReportCard extends StatelessWidget {
   const _ReportCard({
     required this.report,
     required this.reporter,
+    required this.kategori,
     required this.onTap,
   });
 
   final Map<String, dynamic> report;
   final String reporter;
+  final String kategori;
   final VoidCallback onTap;
 
   @override
@@ -637,12 +716,12 @@ class _ReportCard extends StatelessWidget {
       'Rendah' => AppColors.success,
       _ => AppColors.textWeak,
     };
-    final kategori = report['id_kategori']?.toString().trim();
-    final reportDate =
-        report['tgl_laporan']?.toString() ??
-        report['tanggal_laporan']?.toString() ??
-        '-';
-    final deadline = report['deadline']?.toString().trim();
+    final reportDate = _displayDate(
+      _reportValue(report, ['tgl_laporan', 'tanggal_laporan', 'created_at']),
+    );
+    final deadline = _displayDate(
+      _reportValue(report, ['deadline', 'tgl_deadline', 'tanggal_deadline']),
+    );
     final lastUpdatedBy =
         report['last_update_by']?.toString() ??
         report['lastUpdateBy']?.toString() ??
@@ -656,13 +735,20 @@ class _ReportCard extends StatelessWidget {
       status: status,
       onTap: onTap,
       metaChips: [
-        if (kategori != null && kategori.isNotEmpty)
+        if (kategori.isNotEmpty && kategori != '-')
           ReportMetaChip(icon: Icons.folder_outlined, label: kategori),
         if (priority != null && priority.isNotEmpty && priority != '-')
           ReportMetaChip(
             icon: Icons.flag_outlined,
             label: priority,
             color: priorityColor,
+          ),
+        // Tanda bahwa laporan sudah Done dan sudah divalidasi oleh pelapor.
+        if (status == 'Done' && report['validasi_pelapor'] == true)
+          const ReportMetaChip(
+            icon: Icons.verified_outlined,
+            label: 'Tervalidasi pelapor',
+            color: AppColors.success,
           ),
       ],
       infoItems: [
@@ -674,7 +760,7 @@ class _ReportCard extends StatelessWidget {
         ReportInfoItem(
           icon: Icons.event_outlined,
           label: 'Deadline',
-          value: deadline == null || deadline.isEmpty ? '-' : deadline,
+          value: deadline.isEmpty ? '-' : deadline,
         ),
       ],
       people: [
@@ -729,6 +815,36 @@ class _ReadOnlyInfo extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Ambil nilai pertama yang tidak kosong dari [keys] pada [report].
+String _reportValue(Map<String, dynamic> report, List<String> keys) {
+  for (final key in keys) {
+    final text = report[key]?.toString().trim() ?? '';
+    if (text.isNotEmpty) return text;
+  }
+  return '-';
+}
+
+/// Tampilkan tanggal sebagai `dd/MM/yyyy` bila bisa diparse.
+String _displayDate(String value) {
+  final text = value.trim();
+  if (text.isEmpty || text == '-') return '-';
+
+  final iso = DateTime.tryParse(text);
+  if (iso != null) {
+    return '${iso.day.toString().padLeft(2, '0')}/'
+        '${iso.month.toString().padLeft(2, '0')}/${iso.year}';
+  }
+
+  final parts = text.split('/');
+  if (parts.length != 3) return text;
+  final day = int.tryParse(parts[0]);
+  final month = int.tryParse(parts[1]);
+  final year = int.tryParse(parts[2]);
+  if (day == null || month == null || year == null) return text;
+  return '${day.toString().padLeft(2, '0')}/'
+      '${month.toString().padLeft(2, '0')}/$year';
 }
 
 InputDecoration _inputDecoration({required String hint}) {

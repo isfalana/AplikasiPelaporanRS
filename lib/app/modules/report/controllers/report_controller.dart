@@ -165,8 +165,11 @@ class ReportController extends GetxController {
     };
   }
 
-  String category(Map<String, dynamic> report) =>
-      _value(report, 'id_kategori', 'kategori', 'nama_kategori');
+  String category(Map<String, dynamic> report) {
+    final value = _value(report, 'id_kategori', 'kategori', 'nama_kategori');
+    if (value == '-' || value.isEmpty) return '-';
+    return laporanController.kategoriName(value);
+  }
 
   String reporter(Map<String, dynamic> report) {
     final nik = _value(report, 'id_nik_pelapor', 'nik_pelapor');
@@ -274,7 +277,20 @@ class ReportController extends GetxController {
 
   DateTime? _parseDate(String value) {
     if (value.isEmpty || value == '-') return null;
-    return DateTime.tryParse(value);
+
+    // Sebagian data disimpan sebagai ISO (yyyy-MM-dd), sebagian lagi sebagai
+    // format yang dipakai form laporan (dd/MM/yyyy). Keduanya harus terbaca
+    // agar kolom tanggal pada halaman Report tidak kosong.
+    final isoDate = DateTime.tryParse(value);
+    if (isoDate != null) return isoDate;
+
+    final parts = value.split('/');
+    if (parts.length != 3) return null;
+    final day = int.tryParse(parts[0]);
+    final month = int.tryParse(parts[1]);
+    final year = int.tryParse(parts[2]);
+    if (day == null || month == null || year == null) return null;
+    return DateTime(year, month, day);
   }
 
   DateTime _dateOnly(DateTime date) =>

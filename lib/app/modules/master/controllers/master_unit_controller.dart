@@ -2,15 +2,22 @@ import 'package:dio/dio.dart';
 import 'package:get/get.dart';
 
 import '../../../data/services/api_services.dart';
+import '../../../data/services/master_data_store.dart';
 
 /// Controller halaman Master Unit.
 ///
 /// Data diambil dari endpoint `/unit` pada backend. Bila server belum
-/// terhubung, halaman memakai data contoh supaya tetap bisa dipakai.
+/// terhubung, halaman memakai data contoh dari [MasterDataStore] supaya tetap
+/// bisa dipakai dan tetap terhubung dengan halaman master lainnya.
 class MasterUnitController extends GetxController {
   static const _endpoint = '/unit';
 
-  final listUnit = <Map<String, dynamic>>[].obs;
+  MasterDataStore get _store => MasterDataStore.ensure();
+
+  /// Daftar unit milik store bersama, sehingga unit baru langsung muncul pada
+  /// dropdown unit di halaman Master Karyawan.
+  RxList<Map<String, dynamic>> get listUnit => _store.listUnit;
+
   final isLoading = false.obs;
   final isSaving = false.obs;
   final usingDemoData = false.obs;
@@ -129,10 +136,7 @@ class MasterUnitController extends GetxController {
     }
   }
 
-  void _applyLocally({
-    String? originalId,
-    required Map<String, dynamic> row,
-  }) {
+  void _applyLocally({String? originalId, required Map<String, dynamic> row}) {
     final index = originalId == null
         ? -1
         : listUnit.indexWhere(
@@ -148,10 +152,9 @@ class MasterUnitController extends GetxController {
 
   void _useDemoData() {
     usingDemoData.value = true;
-    if (listUnit.isEmpty) {
-      listUnit.assignAll(_demoUnits());
-      _sort();
-    }
+    // Data contoh sudah disemai oleh MasterDataStore. Jangan menimpa data
+    // yang mungkin baru ditambahkan pengguna saat server tidak tersedia.
+    _sort();
   }
 
   void _sort() {
@@ -204,14 +207,5 @@ class MasterUnitController extends GetxController {
       DioExceptionType.sendTimeout => 'Tidak dapat terhubung ke server.',
       _ => fallback,
     };
-  }
-
-  List<Map<String, dynamic>> _demoUnits() {
-    return [
-      {'id_unit': 'UNIT-UMUM', 'nama_unit': 'Unit Umum'},
-      {'id_unit': 'UNIT-IGD', 'nama_unit': 'Instalasi Gawat Darurat'},
-      {'id_unit': 'UNIT-IT', 'nama_unit': 'Teknologi Informasi'},
-      {'id_unit': 'UNIT-SDM', 'nama_unit': 'Sumber Daya Manusia'},
-    ];
   }
 }

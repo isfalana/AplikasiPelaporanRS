@@ -246,18 +246,12 @@ class _MasterUnitContentState extends State<_MasterUnitContent> {
         horizontalMargin: 20,
         columnSpacing: 20,
         columns: const [
-          DataColumn(
-            label: Text('ID Unit'),
-            columnWidth: FlexColumnWidth(1.2),
-          ),
+          DataColumn(label: Text('ID Unit'), columnWidth: FlexColumnWidth(1.2)),
           DataColumn(
             label: Text('Nama Unit'),
             columnWidth: FlexColumnWidth(2.4),
           ),
-          DataColumn(
-            label: Text('Aksi'),
-            columnWidth: FixedColumnWidth(130),
-          ),
+          DataColumn(label: Text('Aksi'), columnWidth: FixedColumnWidth(130)),
         ],
         rows: units.map((unit) {
           final id = unit['id_unit']?.toString() ?? '';
@@ -576,21 +570,20 @@ class _UnitFormDialogState extends State<_UnitFormDialog> {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: AppColors.divider),
                   ),
-                  child: Row(
+                  child: Wrap(
+                    spacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Expanded(
-                        child: Text(
-                          _unitId,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textStrong,
-                          ),
+                      Text(
+                        _unitId,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textStrong,
                         ),
                       ),
-                      const SizedBox(width: 8),
                       Text(
                         _isEdit ? 'tidak dapat diubah' : 'dibuat otomatis',
                         style: const TextStyle(
@@ -607,11 +600,9 @@ class _UnitFormDialogState extends State<_UnitFormDialog> {
                   key: const ValueKey('unit_name_field'),
                   controller: _nameController,
                   maxLength: 100,
-                  decoration: _inputDecoration(
-                    'Contoh: Unit Umum',
-                  ).copyWith(counterText: ''),
-                  validator: (value) =>
-                      (value == null || value.trim().isEmpty)
+                  decoration: _inputDecoration('Contoh: Unit Umum')
+                      .copyWith(counterText: ''),
+                  validator: (value) => (value == null || value.trim().isEmpty)
                       ? 'Nama unit wajib diisi.'
                       : null,
                 ),

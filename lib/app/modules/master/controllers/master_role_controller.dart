@@ -1,16 +1,24 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:get/get.dart';
 
 import '../../../data/services/api_services.dart';
+import '../../../data/services/master_data_store.dart';
 
 /// Controller halaman Master Role.
 ///
 /// Data diambil dari endpoint `/role` pada backend. Bila server belum
-/// terhubung, halaman memakai data contoh supaya tetap bisa dipakai.
+/// terhubung, halaman memakai data contoh dari [MasterDataStore] supaya tetap
+/// bisa dipakai dan tetap terhubung dengan dropdown role karyawan.
 class MasterRoleController extends GetxController {
   static const _endpoint = '/role';
 
-  final listRole = <Map<String, dynamic>>[].obs;
+  MasterDataStore get _store => MasterDataStore.ensure();
+
+  /// Daftar role milik store bersama, dipakai juga oleh form karyawan.
+  RxList<Map<String, dynamic>> get listRole => _store.listRole;
+
   final isLoading = false.obs;
   final isSaving = false.obs;
   final usingDemoData = false.obs;
@@ -77,6 +85,7 @@ class MasterRoleController extends GetxController {
   Future<String?> saveRole({
     String? originalId,
     required String namaRole,
+    List<String> permissions = const [],
   }) async {
     final nama = namaRole.trim();
     if (nama.isEmpty) return 'Nama role wajib diisi.';
@@ -86,6 +95,7 @@ class MasterRoleController extends GetxController {
     final id = isCreate ? generateRoleId() : originalId.trim();
     if (id.isEmpty) return 'ID role tidak valid.';
 
+    final selectedPermissions = _cleanPermissions(permissions);
     final now = DateTime.now().toIso8601String();
     Map<String, dynamic>? existing;
     if (!isCreate) {
@@ -97,6 +107,7 @@ class MasterRoleController extends GetxController {
     final row = <String, dynamic>{
       'id_role': id,
       'nama_role': nama,
+      'permissions': selectedPermissions,
       'created_at': existing?['created_at'] ?? now,
       'updated_at': now,
     };
@@ -105,7 +116,11 @@ class MasterRoleController extends GetxController {
     try {
       if (!usingDemoData.value) {
         final dio = await ApiService.getClient();
-        final data = <String, dynamic>{'id_role': id, 'nama_role': nama};
+        final data = <String, dynamic>{
+          'id_role': id,
+          'nama_role': nama,
+          'permissions': selectedPermissions,
+        };
         if (isCreate) {
           await dio.post(_endpoint, data: data);
         } else {
@@ -119,6 +134,26 @@ class MasterRoleController extends GetxController {
     } finally {
       isSaving.value = false;
     }
+  }
+
+  /// Ringkas daftar permission: hanya key yang dikenal, tanpa duplikat.
+  ///
+  /// Bila seluruh permission dipilih, simpan wildcard `*` supaya role tetap
+  /// mendapat fitur baru yang ditambahkan di kemudian hari.
+  List<String> _cleanPermissions(List<String> permissions) {
+    final values = permissions
+        .map((permission) => permission.trim())
+        .where(MasterDataStore.allPermissions.contains)
+        .toSet();
+    if (values.length == MasterDataStore.allPermissions.length) {
+      return [MasterDataStore.wildcardPermission];
+    }
+    return values.toList()..sort();
+  }
+
+  /// Hak akses milik [role], dipakai untuk ringkasan pada tabel.
+  Set<String> permissionsOf(Map<String, dynamic> role) {
+    return _store.permissionsForRole(role['id_role']?.toString() ?? '');
   }
 
   /// Hapus role. Mengembalikan pesan error, atau null bila berhasil.
@@ -158,10 +193,9 @@ class MasterRoleController extends GetxController {
 
   void _useDemoData() {
     usingDemoData.value = true;
-    if (listRole.isEmpty) {
-      listRole.assignAll(_demoRole());
-      _sort();
-    }
+    // Data contoh sudah disemai oleh MasterDataStore. Jangan menimpa data
+    // yang mungkin baru ditambahkan pengguna saat server tidak tersedia.
+    _sort();
   }
 
   void _sort() {
@@ -177,10 +211,53 @@ class MasterRoleController extends GetxController {
     return {
       'id_role': (row['id_role'] ?? row['idRole'] ?? '').toString(),
       'nama_role': (row['nama_role'] ?? row['namaRole'] ?? '').toString(),
+      'permissions': _normalizePermissions(
+        row['permissions'] ??
+            row['permission'] ??
+            row['hak_akses'] ??
+            row['hakAkses'],
+      ),
       'created_at': row['created_at'] ?? row['createdAt'],
       'updated_at': row['updated_at'] ?? row['updatedAt'],
       'deleted_at': row['deleted_at'] ?? row['deletedAt'],
     };
+  }
+
+  /// Bentuk permission dari backend bisa berupa list string, list object,
+  /// string dipisah koma, atau string JSON. Semuanya diseragamkan di sini.
+  List<String> _normalizePermissions(dynamic raw) {
+    final values = <String>{};
+    void collect(dynamic value) {
+      if (value is Iterable) {
+        for (final item in value) {
+          collect(item);
+        }
+        return;
+      }
+      if (value is Map) {
+        final key =
+            value['permission'] ??
+            value['key'] ??
+            value['name'] ??
+            value['id_permission'];
+        if (key != null) values.add(key.toString().trim());
+        return;
+      }
+      final text = value?.toString().trim() ?? '';
+      if (text.isEmpty) return;
+      if (text.startsWith('[') || text.startsWith('{')) {
+        try {
+          collect(jsonDecode(text));
+          return;
+        } catch (_) {
+          // Bukan JSON valid; lanjut sebagai teks biasa.
+        }
+      }
+      values.addAll(text.split(RegExp(r'[,\s]+')));
+    }
+
+    collect(raw);
+    return values.where((value) => value.isNotEmpty).toList();
   }
 
   List<Map<String, dynamic>> _extractRows(dynamic payload) {
@@ -218,30 +295,5 @@ class MasterRoleController extends GetxController {
       DioExceptionType.sendTimeout => 'Tidak dapat terhubung ke server.',
       _ => fallback,
     };
-  }
-
-  List<Map<String, dynamic>> _demoRole() {
-    return [
-      {
-        'id_role': 'ROLE-ADMIN',
-        'nama_role': 'Administrator',
-        'created_at': '2026-10-02T08:10:00',
-      },
-      {
-        'id_role': 'ROLE-DOKTER',
-        'nama_role': 'Dokter',
-        'created_at': '2026-10-02T08:12:00',
-      },
-      {
-        'id_role': 'ROLE-PETUGAS',
-        'nama_role': 'Petugas Umum',
-        'created_at': '2026-10-02T08:14:00',
-      },
-      {
-        'id_role': 'ROLE-TEKNISI',
-        'nama_role': 'Teknisi',
-        'created_at': '2026-10-02T08:16:00',
-      },
-    ];
   }
 }

@@ -3,20 +3,29 @@ import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../data/services/api_services.dart';
+import '../../../data/services/master_data_store.dart';
 
 /// Controller halaman Master Karyawan.
 ///
 /// Data karyawan diambil dari endpoint `/users` beserta relasinya ke
 /// `/unit` dan `/role`. Bila server belum terhubung, halaman memakai data
-/// contoh supaya tetap bisa dipakai.
+/// contoh dari [MasterDataStore] supaya tetap bisa dipakai dan tetap
+/// terhubung dengan halaman master lainnya.
 class MasterKaryawanController extends GetxController {
   static const _usersEndpoint = '/users';
   static const _unitEndpoint = '/unit';
   static const _roleEndpoint = '/role';
 
-  final listKaryawan = <Map<String, dynamic>>[].obs;
-  final listUnit = <Map<String, dynamic>>[].obs;
-  final listRole = <Map<String, dynamic>>[].obs;
+  MasterDataStore get _store => MasterDataStore.ensure();
+
+  /// Daftar karyawan milik store bersama.
+  RxList<Map<String, dynamic>> get listKaryawan => _store.listKaryawan;
+
+  /// Daftar unit dan role dari store bersama. Unit/role yang ditambahkan pada
+  /// halaman master lain langsung muncul pada dropdown form ini.
+  RxList<Map<String, dynamic>> get listUnit => _store.listUnit;
+  RxList<Map<String, dynamic>> get listRole => _store.listRole;
+
   final isLoading = false.obs;
   final isSaving = false.obs;
   final usingDemoData = false.obs;
@@ -61,41 +70,44 @@ class MasterKaryawanController extends GetxController {
 
       try {
         final response = await dio.get(_usersEndpoint);
-        listKaryawan.assignAll(
-          _extractRows(response.data).map(_normalizeKaryawan),
-        );
-        _usersFromServer = true;
+        final rows = _extractRows(response.data)
+            .map(_normalizeKaryawan)
+            .toList();
+        if (rows.isNotEmpty) {
+          listKaryawan.assignAll(rows);
+          _usersFromServer = true;
+        } else {
+          usersDemo = true;
+        }
       } catch (_) {
         usersDemo = true;
-        listKaryawan.assignAll(_demoKaryawan());
       }
 
-      if (usersDemo) {
-        // Data contoh harus konsisten, jadi unit dan role ikut memakai
-        // daftar contoh meskipun endpoint-nya sempat merespons.
-        listUnit.assignAll(_demoUnit());
-        listRole.assignAll(_demoRole());
-      } else {
-        // Bila daftar referensi gagal dimuat, opsi tetap dilengkapi dari
-        // relasi unitData/roleData pada data karyawan.
+      if (!usersDemo) {
+        // Bila daftar referensi gagal dimuat, opsi tetap memakai data dari
+        // store bersama agar tidak menghapus unit/role yang sudah ada.
         try {
           final response = await dio.get(_unitEndpoint);
-          listUnit.assignAll(_extractRows(response.data).map(_normalizeUnit));
+          final rows = _extractRows(response.data).map(_normalizeUnit).toList();
+          if (rows.isNotEmpty) listUnit.assignAll(rows);
         } catch (_) {
-          listUnit.clear();
+          // Pertahankan daftar unit dari store.
         }
 
         try {
           final response = await dio.get(_roleEndpoint);
-          listRole.assignAll(_extractRows(response.data).map(_normalizeRole));
+          final rows = _extractRows(response.data).map(_normalizeRole).toList();
+          if (rows.isNotEmpty) listRole.assignAll(rows);
         } catch (_) {
-          listRole.clear();
+          // Pertahankan daftar role dari store.
         }
       }
 
       _hydrateRelations();
       _sort();
       usingDemoData.value = usersDemo;
+    } catch (_) {
+      usingDemoData.value = true;
     } finally {
       isLoading.value = false;
     }
@@ -270,23 +282,28 @@ class MasterKaryawanController extends GetxController {
         .map((role) => role['id_role']?.toString() ?? '')
         .toSet();
 
-    for (final karyawan in listKaryawan) {
-      final unitId = karyawan['id_unit']?.toString().trim() ?? '';
-      if (unitId.isNotEmpty && !unitIds.contains(unitId)) {
-        listUnit.add({
-          'id_unit': unitId,
-          'nama_unit': _displayOrId(karyawan['nama_unit'], unitId),
-        });
-        unitIds.add(unitId);
-      }
+    // Pada mode contoh, unit dan role berasal dari store bersama. Relasi yang
+    // tidak ditemukan berarti memang sudah dihapus, jadi jangan dihidupkan
+    // kembali. Pelengkapan hanya diperlukan saat karyawan datang dari server.
+    if (_usersFromServer) {
+      for (final karyawan in listKaryawan) {
+        final unitId = karyawan['id_unit']?.toString().trim() ?? '';
+        if (unitId.isNotEmpty && !unitIds.contains(unitId)) {
+          listUnit.add({
+            'id_unit': unitId,
+            'nama_unit': _displayOrId(karyawan['nama_unit'], unitId),
+          });
+          unitIds.add(unitId);
+        }
 
-      final roleId = karyawan['id_role']?.toString().trim() ?? '';
-      if (roleId.isNotEmpty && !roleIds.contains(roleId)) {
-        listRole.add({
-          'id_role': roleId,
-          'nama_role': _displayOrId(karyawan['nama_role'], roleId),
-        });
-        roleIds.add(roleId);
+        final roleId = karyawan['id_role']?.toString().trim() ?? '';
+        if (roleId.isNotEmpty && !roleIds.contains(roleId)) {
+          listRole.add({
+            'id_role': roleId,
+            'nama_role': _displayOrId(karyawan['nama_role'], roleId),
+          });
+          roleIds.add(roleId);
+        }
       }
     }
 
@@ -400,56 +417,5 @@ class MasterKaryawanController extends GetxController {
       DioExceptionType.sendTimeout => 'Tidak dapat terhubung ke server.',
       _ => fallback,
     };
-  }
-
-  List<Map<String, dynamic>> _demoKaryawan() {
-    return [
-      {
-        'id_nik': 'NIK-001',
-        'nama_karyawan': 'dr. Enung Sp.PD',
-        'id_unit': 'UNIT-IGD',
-        'id_role': 'ROLE-DOKTER',
-        'last_login': '2026-11-11T08:24:00',
-      },
-      {
-        'id_nik': 'NIK-002',
-        'nama_karyawan': 'Rina Kartika',
-        'id_unit': 'UNIT-UMUM',
-        'id_role': 'ROLE-ADMIN',
-        'last_login': '2026-11-12T07:05:00',
-      },
-      {
-        'id_nik': 'NIK-003',
-        'nama_karyawan': 'Budi Santoso',
-        'id_unit': 'UNIT-SDM',
-        'id_role': 'ROLE-PETUGAS',
-        'last_login': null,
-      },
-      {
-        'id_nik': 'NIK-004',
-        'nama_karyawan': 'Andi Pratama',
-        'id_unit': 'UNIT-IT',
-        'id_role': 'ROLE-TEKNISI',
-        'last_login': '2026-11-10T16:40:00',
-      },
-    ];
-  }
-
-  List<Map<String, dynamic>> _demoUnit() {
-    return [
-      {'id_unit': 'UNIT-UMUM', 'nama_unit': 'Unit Umum'},
-      {'id_unit': 'UNIT-IGD', 'nama_unit': 'Instalasi Gawat Darurat'},
-      {'id_unit': 'UNIT-IT', 'nama_unit': 'Teknologi Informasi'},
-      {'id_unit': 'UNIT-SDM', 'nama_unit': 'Sumber Daya Manusia'},
-    ];
-  }
-
-  List<Map<String, dynamic>> _demoRole() {
-    return [
-      {'id_role': 'ROLE-ADMIN', 'nama_role': 'Administrator'},
-      {'id_role': 'ROLE-DOKTER', 'nama_role': 'Dokter'},
-      {'id_role': 'ROLE-PETUGAS', 'nama_role': 'Petugas'},
-      {'id_role': 'ROLE-TEKNISI', 'nama_role': 'Teknisi'},
-    ];
   }
 }

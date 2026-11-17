@@ -34,15 +34,15 @@ void main() {
 
     expect(find.text('Master Kategori'), findsWidgets);
     expect(find.byType(DataTable), findsOneWidget);
-    expect(find.text('Kelistrikan'), findsOneWidget);
-    expect(find.text('Jaringan & Internet'), findsOneWidget);
+    expect(find.text('permasalahan'), findsOneWidget);
+    expect(find.text('Informasi'), findsOneWidget);
     expect(find.text('Tambah Kategori'), findsOneWidget);
 
-    await tester.enterText(find.byType(TextField), 'jaringan');
+    await tester.enterText(find.byType(TextField), 'informasi');
     await tester.pump();
 
-    expect(find.text('Jaringan & Internet'), findsOneWidget);
-    expect(find.text('Kelistrikan'), findsNothing);
+    expect(find.text('Informasi'), findsOneWidget);
+    expect(find.text('permasalahan'), findsNothing);
 
     await tester.enterText(find.byType(TextField), 'tidak-ada');
     await tester.pump();
@@ -61,7 +61,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('dibuat otomatis'), findsOneWidget);
-    expect(find.text('KAT-06'), findsOneWidget);
+    expect(find.text('KAT-04'), findsOneWidget);
 
     await tester.enterText(
       find.byKey(const ValueKey('kategori_jenis_field')),
@@ -73,7 +73,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Peralatan Medis'), findsOneWidget);
-    expect(find.text('KAT-06'), findsOneWidget);
+    expect(find.text('KAT-04'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -108,7 +108,7 @@ void main() {
     await tester.pump(const Duration(seconds: 4));
     await tester.pumpAndSettle();
 
-    expect(find.text('Fasilitas Umum'), findsNothing);
+    expect(find.text('Arahan Direktur'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -118,7 +118,7 @@ void main() {
     await openMasterKategori(tester, const Size(390, 844));
 
     expect(find.byType(DataTable), findsNothing);
-    expect(find.text('Kelistrikan'), findsOneWidget);
+    expect(find.text('permasalahan'), findsOneWidget);
     expect(find.text('Tambah Kategori'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

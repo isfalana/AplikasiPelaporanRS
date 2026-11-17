@@ -1,3 +1,4 @@
+import 'package:aplikasilaporan/app/data/services/master_data_store.dart';
 import 'package:aplikasilaporan/app/routes/app_pages.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -34,15 +35,15 @@ void main() {
 
     expect(find.text('Master Role'), findsWidgets);
     expect(find.byType(DataTable), findsOneWidget);
-    expect(find.text('Administrator'), findsOneWidget);
-    expect(find.text('Teknisi'), findsOneWidget);
+    expect(find.text('karu'), findsOneWidget);
+    expect(find.text('superadmin'), findsOneWidget);
     expect(find.text('Tambah Role'), findsOneWidget);
 
-    await tester.enterText(find.byType(TextField), 'teknisi');
+    await tester.enterText(find.byType(TextField), 'admin');
     await tester.pump();
 
-    expect(find.text('Teknisi'), findsOneWidget);
-    expect(find.text('Administrator'), findsNothing);
+    expect(find.text('superadmin'), findsOneWidget);
+    expect(find.text('karu'), findsNothing);
 
     await tester.enterText(find.byType(TextField), 'tidak-ada');
     await tester.pump();
@@ -61,7 +62,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('dibuat otomatis'), findsOneWidget);
-    expect(find.text('ROLE-05'), findsOneWidget);
+    expect(find.text('ROLE-03'), findsOneWidget);
 
     await tester.enterText(
       find.byKey(const ValueKey('role_nama_field')),
@@ -73,7 +74,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Perawat'), findsOneWidget);
-    expect(find.text('ROLE-05'), findsOneWidget);
+    expect(find.text('ROLE-03'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -108,7 +109,7 @@ void main() {
     await tester.pump(const Duration(seconds: 4));
     await tester.pumpAndSettle();
 
-    expect(find.text('Administrator'), findsNothing);
+    expect(find.text('karu'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -118,7 +119,7 @@ void main() {
     await openMasterRole(tester, const Size(390, 844));
 
     expect(find.byType(DataTable), findsNothing);
-    expect(find.text('Administrator'), findsOneWidget);
+    expect(find.text('karu'), findsOneWidget);
     expect(find.text('Tambah Role'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -141,6 +142,33 @@ void main() {
 
     expect(Get.currentRoute, Routes.MASTER_ROLE);
     expect(find.text('Tambah Role'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('role baru menyimpan hak akses yang dipilih', (tester) async {
+    await openMasterRole(tester, const Size(1440, 1000));
+
+    await tester.tap(find.text('Tambah Role'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('role_nama_field')),
+      'Perawat',
+    );
+    await tester.ensureVisible(find.text('Lihat pesan tindakan'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Lihat pesan tindakan'));
+    await tester.pump();
+
+    await tester.tap(find.text('Simpan'));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+
+    final permissions = MasterDataStore.ensure().permissionsForRole('ROLE-03');
+    expect(permissions, contains('tindakan.lihat'));
+    expect(permissions, isNot(contains('report.export')));
+    expect(find.text('1 hak akses'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
