@@ -39,6 +39,9 @@ class _ReportContent extends StatefulWidget {
 class _ReportContentState extends State<_ReportContent> {
   late final TextEditingController _searchController;
 
+  /// ID laporan yang kartunya sedang dibuka (tampilan mobile).
+  final Set<String> _expandedReports = {};
+
   ReportController get controller => widget.controller;
 
   /// Cek hak akses akun yang sedang login.
@@ -772,20 +775,7 @@ class _ReportContentState extends State<_ReportContent> {
                       ),
                     ),
                     DataCell(
-                      SizedBox(
-                        width: 220,
-                        child: Text(
-                          controller
-                              .actions(report)
-                              .map(
-                                (action) =>
-                                    '${controller.isActionComplete(report, action) ? '[x]' : '[ ]'} ${action['deskripsi_tindakan'] ?? '-'}',
-                              )
-                              .join(' • '),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
+                      SizedBox(width: 240, child: _actionSummary(report)),
                     ),
                     DataCell(_statusPill(controller.status(report))),
                     DataCell(Text(controller.actionStartDate(report))),
@@ -799,7 +789,24 @@ class _ReportContentState extends State<_ReportContent> {
     );
   }
 
+  /// Semua tindakan ditampilkan tanpa dipotong agar isi kolom Tindakan utuh.
+  Widget _actionSummary(Map<String, dynamic> report) {
+    final actions = controller.actions(report);
+    if (actions.isEmpty) return const Text('-');
+    return Text(
+      actions
+          .map(
+            (action) =>
+                '${controller.isActionComplete(report, action) ? '[x]' : '[ ]'} '
+                '${action['deskripsi_tindakan'] ?? '-'}',
+          )
+          .join('\n'),
+      style: const TextStyle(fontSize: 12.5, height: 1.35),
+    );
+  }
+
   Widget _mobileCard(Map<String, dynamic> report) {
+    final id = controller.value(report, 'id_laporan');
     final status = controller.status(report);
     final statusColor = _statusColor(status);
     final actions = controller.actions(report);
@@ -807,9 +814,21 @@ class _ReportContentState extends State<_ReportContent> {
         .where((action) => controller.isActionComplete(report, action))
         .length;
     final progress = actions.isEmpty ? 0.0 : completed / actions.length;
+    final expanded = _expandedReports.contains(id);
+
+    void toggle() {
+      setState(() {
+        if (expanded) {
+          _expandedReports.remove(id);
+        } else {
+          _expandedReports.add(id);
+        }
+      });
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(12),
@@ -822,166 +841,238 @@ class _ReportContentState extends State<_ReportContent> {
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-            decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.05),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(12),
-              ),
-              border: const Border(bottom: BorderSide(color: AppColors.border)),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        controller.value(report, 'id_laporan'),
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.4,
-                          color: AppColors.textWeak,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        controller.reportTitle(report),
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          height: 1.3,
-                          color: AppColors.textStrong,
-                        ),
-                      ),
-                    ],
+      child: Material(
+        color: AppColors.white,
+        surfaceTintColor: AppColors.white,
+        child: InkWell(
+          onTap: toggle,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.05),
+                  border: const Border(
+                    bottom: BorderSide(color: AppColors.border),
                   ),
                 ),
-                const SizedBox(width: 10),
-                _statusPill(status),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _metaChip(
-                      Icons.folder_outlined,
-                      controller.category(report),
-                    ),
-                    if (actions.isNotEmpty)
-                      _metaChip(
-                        Icons.checklist_rounded,
-                        '${actions.length} tindakan',
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                _infoGrid(report),
-                const SizedBox(height: 12),
-                _personRow(
-                  Icons.account_circle_outlined,
-                  'Pelapor',
-                  controller.reporter(report),
-                ),
-                const SizedBox(height: 8),
-                _personRow(
-                  Icons.assignment_ind_outlined,
-                  'PIC',
-                  controller.pic(report),
-                ),
-                if (actions.isNotEmpty) ...[
-                  const Divider(height: 24),
-                  Row(
-                    children: [
-                      const Text(
-                        'Progres tindakan',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textStrong,
-                        ),
-                      ),
-                      const Spacer(),
-                      Text(
-                        '$completed/${actions.length} selesai',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: statusColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: LinearProgressIndicator(
-                      value: progress,
-                      minHeight: 6,
-                      backgroundColor: AppColors.border,
-                      valueColor: const AlwaysStoppedAnimation(
-                        AppColors.primary,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  ...actions.map((action) {
-                    final complete = controller.isActionComplete(
-                      report,
-                      action,
-                    );
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: Row(
+                    Expanded(
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(
-                            complete
-                                ? Icons.check_circle_rounded
-                                : Icons.radio_button_unchecked_rounded,
-                            size: 16,
-                            color: complete
-                                ? AppColors.success
-                                : AppColors.textWeak,
+                          Text(
+                            id,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.4,
+                              color: AppColors.textWeak,
+                            ),
                           ),
-                          const SizedBox(width: 7),
-                          Expanded(
-                            child: Text(
-                              action['deskripsi_tindakan']?.toString() ?? '-',
-                              style: TextStyle(
-                                fontSize: 12,
-                                height: 1.3,
-                                color: complete
-                                    ? AppColors.textWeak
-                                    : AppColors.textStrong,
-                                decoration: complete
-                                    ? TextDecoration.lineThrough
-                                    : null,
-                              ),
+                          const SizedBox(height: 4),
+                          Text(
+                            controller.reportTitle(report),
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              height: 1.3,
+                              color: AppColors.textStrong,
                             ),
                           ),
                         ],
                       ),
-                    );
-                  }),
-                ],
-              ],
-            ),
+                    ),
+                    const SizedBox(width: 10),
+                    _statusPill(status),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        _metaChip(
+                          Icons.folder_outlined,
+                          controller.category(report),
+                        ),
+                        if (actions.isNotEmpty)
+                          _metaChip(
+                            Icons.checklist_rounded,
+                            '${actions.length} tindakan',
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    // Ringkasan singkat; ketuk kartu untuk membuka seluruh
+                    // informasi seperti pada tabel desktop.
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.calendar_today_outlined,
+                          size: 13,
+                          color: AppColors.textWeak,
+                        ),
+                        const SizedBox(width: 5),
+                        Expanded(
+                          child: Text(
+                            'Lap. ${controller.dateText(controller.reportDate(report))}'
+                            '  ·  Kej. ${controller.eventDate(report)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              color: AppColors.textWeak,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          expanded ? 'Tutup' : 'Detail',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                        AnimatedRotation(
+                          turns: expanded ? 0.5 : 0,
+                          duration: const Duration(milliseconds: 200),
+                          child: const Icon(
+                            Icons.expand_more_rounded,
+                            size: 18,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeInOut,
+                      alignment: Alignment.topCenter,
+                      child: expanded
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Divider(height: 24),
+                                _infoGrid(report),
+                                const SizedBox(height: 12),
+                                _personRow(
+                                  Icons.account_circle_outlined,
+                                  'Pelapor',
+                                  controller.reporter(report),
+                                ),
+                                const SizedBox(height: 8),
+                                _personRow(
+                                  Icons.assignment_ind_outlined,
+                                  'PIC',
+                                  controller.pic(report),
+                                ),
+                                if (actions.isNotEmpty) ...[
+                                  const Divider(height: 24),
+                                  Row(
+                                    children: [
+                                      const Text(
+                                        'Progres tindakan',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.textStrong,
+                                        ),
+                                      ),
+                                      const Spacer(),
+                                      Text(
+                                        '$completed/${actions.length} selesai',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: statusColor,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(20),
+                                    child: LinearProgressIndicator(
+                                      value: progress,
+                                      minHeight: 6,
+                                      backgroundColor: AppColors.border,
+                                      valueColor: const AlwaysStoppedAnimation(
+                                        AppColors.primary,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  ...actions.map((action) {
+                                    final complete = controller
+                                        .isActionComplete(report, action);
+                                    return Padding(
+                                      padding: const EdgeInsets.only(bottom: 6),
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Icon(
+                                            complete
+                                                ? Icons.check_circle_rounded
+                                                : Icons
+                                                      .radio_button_unchecked_rounded,
+                                            size: 16,
+                                            color: complete
+                                                ? AppColors.success
+                                                : AppColors.textWeak,
+                                          ),
+                                          const SizedBox(width: 7),
+                                          Expanded(
+                                            child: Text(
+                                              action['deskripsi_tindakan']
+                                                      ?.toString() ??
+                                                  '-',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                height: 1.3,
+                                                color: complete
+                                                    ? AppColors.textWeak
+                                                    : AppColors.textStrong,
+                                                decoration: complete
+                                                    ? TextDecoration.lineThrough
+                                                    : null,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }),
+                                ] else ...[
+                                  const Divider(height: 24),
+                                  const Text(
+                                    'Belum ada tindakan.',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.textWeak,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            )
+                          : const SizedBox(width: double.infinity),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

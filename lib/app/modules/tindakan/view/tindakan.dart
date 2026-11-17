@@ -470,36 +470,66 @@ class _TindakanContent extends GetView<TindakanController> {
               alignment: WrapAlignment.spaceBetween,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 8,
-                  crossAxisAlignment: WrapCrossAlignment.center,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text(
-                      'Status',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                      ),
-                    ),
-                    Obx(
-                      () => DropdownButton<String>(
-                        value: controller.selectedStatus.value,
-                        items: const [
-                          DropdownMenuItem(value: 'Open', child: Text('Open')),
-                          DropdownMenuItem(
-                            value: 'On Progress',
-                            child: Text('On Progress'),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        const Text(
+                          'Status',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
                           ),
-                          DropdownMenuItem(value: 'Done', child: Text('Done')),
-                        ],
-                        onChanged: (value) {
-                          if (value != null) {
-                            controller.selectedStatus.value = value;
-                          }
-                        },
-                      ),
+                        ),
+                        Obx(
+                          () => DropdownButton<String>(
+                            value: controller.selectedStatus.value,
+                            items: [
+                              const DropdownMenuItem(
+                                value: 'Open',
+                                child: Text('Open'),
+                              ),
+                              const DropdownMenuItem(
+                                value: 'On Progress',
+                                child: Text('On Progress'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'Done',
+                                // Done hanya bisa dipilih setelah semua
+                                // tindakan dicentang selesai.
+                                enabled:
+                                    controller.allActionsComplete ||
+                                    controller.selectedStatus.value == 'Done',
+                                child: const Text('Done'),
+                              ),
+                            ],
+                            onChanged: (value) {
+                              if (value != null) {
+                                controller.selectedStatus.value = value;
+                              }
+                            },
+                          ),
+                        ),
+                      ],
                     ),
+                    if (controller.actionItems.isNotEmpty &&
+                        !controller.allActionsComplete)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 6),
+                        child: Text(
+                          'Centang semua tindakan sebelum mengubah status '
+                          'menjadi Done.',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textWeak,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
                 ElevatedButton(
@@ -712,6 +742,13 @@ class _ReportCard extends StatelessWidget {
             icon: Icons.flag_outlined,
             label: priority,
             color: priorityColor,
+          ),
+        // Tanda bahwa laporan sudah Done dan sudah divalidasi oleh pelapor.
+        if (status == 'Done' && report['validasi_pelapor'] == true)
+          const ReportMetaChip(
+            icon: Icons.verified_outlined,
+            label: 'Tervalidasi pelapor',
+            color: AppColors.success,
           ),
       ],
       infoItems: [

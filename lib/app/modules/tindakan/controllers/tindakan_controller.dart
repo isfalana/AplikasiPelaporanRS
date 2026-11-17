@@ -38,6 +38,13 @@ class TindakanController extends GetxController {
 
   final Map<String, List<Map<String, dynamic>>> _detailsByReport = {};
 
+  /// Penomoran tambahan agar setiap tindakan mendapat `id_detail` yang unik.
+  ///
+  /// `DateTime.now().microsecondsSinceEpoch` bisa menghasilkan nilai yang sama
+  /// saat beberapa tindakan ditambahkan beruntun (misalnya dari template),
+  /// sehingga progres centang antar tindakan saling tertukar.
+  int _detailCounter = 0;
+
   /// Laporan yang menjadi tanggung jawab akun ini.
   ///
   /// Semua status tetap ditampilkan (Open, On Progress, maupun Done) agar
@@ -290,14 +297,30 @@ class TindakanController extends GetxController {
           report['detail_tindakan'] ?? report['detailTindakan'],
         );
     final savedProgress = _progressFromReport(report['progres_tindakan']);
+    final savedProgressOrder = _progressFlagsInOrder(
+      report['progres_tindakan'],
+    );
+    final usedIds = <String>{};
     actionItems.assignAll(
-      savedDetails.map((item) {
-        final action = Map<String, dynamic>.from(item);
-        final detailId = action['id_detail']?.toString();
-        if (detailId != null && savedProgress.containsKey(detailId)) {
-          action['selesai'] = savedProgress[detailId];
+      savedDetails.asMap().entries.map((entry) {
+        final index = entry.key;
+        final action = Map<String, dynamic>.from(entry.value);
+        var detailId = action['id_detail']?.toString().trim() ?? '';
+        // Data lama bisa memiliki id_detail ganda (misalnya tindakan yang
+        // ditambahkan dari template dalam waktu bersamaan). Beri ID baru agar
+        // centang pada satu tindakan tidak menular ke tindakan lain.
+        final duplicate = detailId.isEmpty || usedIds.contains(detailId);
+        if (duplicate) {
+          detailId = _newDetailId();
+          action['id_detail'] = detailId;
         }
-        action.putIfAbsent('selesai', () => false);
+        usedIds.add(detailId);
+        if (duplicate && index < savedProgressOrder.length) {
+          // Untuk ID ganda, progres dibaca sesuai urutan penyimpanan.
+          action['selesai'] = savedProgressOrder[index];
+        } else {
+          action['selesai'] = savedProgress[detailId] ?? false;
+        }
         return action;
       }),
     );
@@ -351,6 +374,21 @@ class TindakanController extends GetxController {
     };
   }
 
+  /// Nilai progres sesuai urutan penyimpanan (dipakai untuk data lama yang
+  /// masih memiliki `id_detail` ganda).
+  List<bool> _progressFlagsInOrder(dynamic value) {
+    if (value is! List) return const [];
+    return value
+        .whereType<Map>()
+        .map((item) => item['selesai'] == true)
+        .toList();
+  }
+
+  /// Apakah seluruh tindak lanjut sudah dicentang selesai.
+  bool get allActionsComplete =>
+      actionItems.isNotEmpty &&
+      actionItems.every((item) => item['selesai'] == true);
+
   String _normalizeStatus(String? status) {
     return switch (status?.trim().toLowerCase()) {
       'done' || 'selesai' => 'Done',
@@ -362,11 +400,16 @@ class TindakanController extends GetxController {
     };
   }
 
+  /// ID unik untuk satu baris tindak lanjut.
+  String _newDetailId() {
+    return 'DT-${DateTime.now().microsecondsSinceEpoch}-${_detailCounter++}';
+  }
+
   bool addActionItem(String description) {
     final text = description.trim();
     if (text.isEmpty) return false;
     actionItems.add({
-      'id_detail': 'DT-${DateTime.now().microsecondsSinceEpoch}',
+      'id_detail': _newDetailId(),
       'id_laporan': selectedReport.value?['id_laporan']?.toString() ?? '',
       'id_nik_pic': activeNik.value,
       'deskripsi_tindakan': text,
@@ -433,6 +476,10 @@ class TindakanController extends GetxController {
     if (actionItems.isEmpty) {
       return 'Tambahkan minimal satu tindak lanjut.';
     }
+    // Status Done hanya boleh dipilih bila seluruh tindakan sudah dicentang.
+    if (selectedStatus.value == 'Done' && !allActionsComplete) {
+      return 'Centang semua tindakan sebelum mengubah status menjadi Done.';
+    }
     final reportId = report['id_laporan']?.toString() ?? '';
     final details = actionItems
         .map((item) => Map<String, dynamic>.from(item))
@@ -492,6 +539,12 @@ class TindakanController extends GetxController {
       selectedStatus.value = 'Open';
     }
     return null;
+  }
+
+  String _dateText(DateTime date) {
+    final day = date.day.toString().padLeft(2, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    return '$day/$month/${date.year}';
   }
 
   @override

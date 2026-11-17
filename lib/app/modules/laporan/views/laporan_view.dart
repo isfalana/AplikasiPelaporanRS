@@ -350,6 +350,11 @@ class _LaporanContentState extends State<_LaporanContent> {
     target['tgl_validasi'] = _formatDate(DateTime.now());
     target['validasi_by'] = _activeNik;
     target['nama_validasi_by'] = _pelaporName(_activeName, _activeNik);
+    // Pastikan tanggal selesai terisi saat pelapor memvalidasi laporan Done.
+    final finishedAt = target['tgl_selesai']?.toString().trim() ?? '';
+    if (finishedAt.isEmpty || finishedAt == '-') {
+      target['tgl_selesai'] = _formatDate(DateTime.now());
+    }
     controller.listLaporan.refresh();
 
     if (!mounted) return;

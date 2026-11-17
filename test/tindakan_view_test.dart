@@ -340,4 +340,222 @@ void main() {
     expect(find.text('Laporan uji muncul di tindakan'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('card tindakan menandai laporan Done yang tervalidasi pelapor', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(Get.reset);
+
+    final laporanController = Get.put(LaporanController(), permanent: true);
+    laporanController.listLaporan.insert(0, {
+      'id_laporan': 'LAP-VALID',
+      'tgl_laporan': '16/11/2026',
+      'tgl_kejadian': '15/11/2026',
+      'deadline': '17/11/2026',
+      'id_unit_pelapor': 'UNIT-UMUM',
+      'id_nik_pelapor': 'NIK-002',
+      'nama_pelapor': 'Rina Kartika',
+      'id_unit_pic': 'UNIT-UMUM',
+      'id_nik_pic': 'NIK-002',
+      'id_kategori': 'KAT-01',
+      'id_tindak_lanjut': 'TL-08',
+      'perihal': 'Laporan selesai dan tervalidasi',
+      'prioritas': 'Sedang',
+      'status': 'Done',
+      'validasi_pelapor': true,
+      'tgl_validasi': '17/11/2026',
+    });
+    laporanController.listLaporan.refresh();
+
+    await tester.pumpWidget(
+      GetMaterialApp(initialRoute: Routes.TINDAKAN, getPages: AppPages.routes),
+    );
+    await tester.pump(const Duration(seconds: 2));
+
+    expect(find.text('Laporan selesai dan tervalidasi'), findsWidgets);
+    expect(find.text('Tervalidasi pelapor'), findsOneWidget);
+    expect(find.text('Done'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('menyimpan tindakan Done mengisi tanggal mulai dan selesai', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(Get.reset);
+
+    await tester.pumpWidget(
+      GetMaterialApp(initialRoute: Routes.TINDAKAN, getPages: AppPages.routes),
+    );
+    await tester.pump(const Duration(seconds: 2));
+
+    final actionField = find.byWidgetPredicate(
+      (widget) =>
+          widget is TextField &&
+          widget.decoration?.hintText == 'Tuliskan langkah tindak lanjut...',
+    );
+    await tester.enterText(actionField, 'Menyelesaikan tindak lanjut');
+    await tester.ensureVisible(find.text('Tambah'));
+    await tester.tap(find.text('Tambah'));
+    await tester.pump();
+
+    // Status Done baru boleh dipilih setelah tindakan dicentang.
+    await tester.tap(find.byType(Checkbox).first);
+    await tester.pump();
+
+    final tindakanController = Get.find<TindakanController>();
+    tindakanController.selectedStatus.value = 'Done';
+    await tester.ensureVisible(find.text('Kirim Tindakan'));
+    await tester.tap(find.text('Kirim Tindakan'));
+    await tester.pumpAndSettle();
+
+    final savedReport = Get.find<LaporanController>().listLaporan.first;
+    expect(savedReport['status'], 'Done');
+    expect(savedReport['tgl_mulai_tindakan'], isNotEmpty);
+    expect(savedReport['tgl_selesai'], isNotEmpty);
+    expect(savedReport['validasi_pelapor'], isFalse);
+
+    Get.offNamed(Routes.REPORT);
+    await tester.pumpAndSettle();
+    expect(find.text(savedReport['tgl_mulai_tindakan']), findsWidgets);
+    expect(find.text(savedReport['tgl_selesai']), findsWidgets);
+    expect(tester.takeException(), isNull);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('centang dari template tidak menular ke tindakan lain', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(Get.reset);
+
+    await tester.pumpWidget(
+      GetMaterialApp(initialRoute: Routes.TINDAKAN, getPages: AppPages.routes),
+    );
+    await tester.pump(const Duration(seconds: 2));
+
+    final tindakanController = Get.find<TindakanController>();
+    // Template berisi beberapa langkah yang ditambahkan beruntun.
+    tindakanController.actionTemplates.assignAll([
+      {
+        'id_template': 'TPL-UJI',
+        'nama_template': 'Template Uji',
+        'list_tindakan': [
+          {'deskripsi_tindakan': 'Langkah satu'},
+          {'deskripsi_tindakan': 'Langkah dua'},
+          {'deskripsi_tindakan': 'Langkah tiga'},
+        ],
+      },
+    ]);
+    tindakanController.selectedTemplateId.value = 'TPL-UJI';
+    await tester.pump();
+
+    await tester.ensureVisible(find.text('Terapkan'));
+    await tester.tap(find.text('Terapkan'));
+    await tester.pumpAndSettle();
+    // Tutup notifikasi template agar tidak menutupi tombol kirim.
+    Get.closeAllSnackbars();
+    await tester.pumpAndSettle();
+
+    expect(find.byType(Checkbox), findsNWidgets(3));
+    // Setiap tindakan harus punya ID unik.
+    final ids = tindakanController.actionItems
+        .map((item) => item['id_detail'])
+        .toSet();
+    expect(ids.length, 3);
+
+    // Centang hanya tindakan kedua.
+    await tester.tap(find.byType(Checkbox).at(1));
+    await tester.pump();
+    tindakanController.selectedStatus.value = 'On Progress';
+    await tester.ensureVisible(find.text('Kirim Tindakan'));
+    await tester.tap(find.text('Kirim Tindakan'));
+    await tester.pumpAndSettle();
+
+    final savedReport = Get.find<LaporanController>().listLaporan.first;
+    final progress = (savedReport['progres_tindakan'] as List)
+        .cast<Map<String, dynamic>>();
+    expect(progress.where((item) => item['selesai'] == true).length, 1);
+    expect(progress[1]['selesai'], isTrue);
+    expect(progress[0]['selesai'], isFalse);
+    expect(progress[2]['selesai'], isFalse);
+
+    // Saat laporan dibuka kembali, hanya satu tindakan yang tetap tercentang.
+    tindakanController.selectReport(savedReport);
+    await tester.pump();
+    expect(
+      tindakanController.actionItems
+          .where((item) => item['selesai'] == true)
+          .length,
+      1,
+    );
+    expect(tindakanController.actionItems[1]['selesai'], isTrue);
+    expect(tester.takeException(), isNull);
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('status Done ditolak bila tindakan belum semua dicentang', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(Get.reset);
+
+    await tester.pumpWidget(
+      GetMaterialApp(initialRoute: Routes.TINDAKAN, getPages: AppPages.routes),
+    );
+    await tester.pump(const Duration(seconds: 2));
+
+    final actionField = find.byWidgetPredicate(
+      (widget) =>
+          widget is TextField &&
+          widget.decoration?.hintText == 'Tuliskan langkah tindak lanjut...',
+    );
+    await tester.enterText(actionField, 'Tindakan belum selesai');
+    await tester.ensureVisible(find.text('Tambah'));
+    await tester.tap(find.text('Tambah'));
+    await tester.pump();
+
+    final tindakanController = Get.find<TindakanController>();
+    tindakanController.selectedStatus.value = 'Done';
+    await tester.ensureVisible(find.text('Kirim Tindakan'));
+    await tester.tap(find.text('Kirim Tindakan'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Centang semua tindakan sebelum mengubah status menjadi Done.'),
+      findsWidgets,
+    );
+    final report = Get.find<LaporanController>().listLaporan.first;
+    expect(report['status'], isNot('Done'));
+
+    // Setelah semua tindakan dicentang, status Done boleh disimpan.
+    Get.closeAllSnackbars();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(Checkbox).first);
+    await tester.pump();
+    await tester.ensureVisible(find.text('Kirim Tindakan'));
+    await tester.tap(find.text('Kirim Tindakan'));
+    await tester.pumpAndSettle();
+
+    expect(report['status'], 'Done');
+    expect(report['tgl_selesai'], isNotEmpty);
+    expect(tester.takeException(), isNull);
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+  });
 }
