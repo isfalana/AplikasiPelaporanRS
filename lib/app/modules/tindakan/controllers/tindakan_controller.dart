@@ -389,6 +389,10 @@ class TindakanController extends GetxController {
       actionItems.isNotEmpty &&
       actionItems.every((item) => item['selesai'] == true);
 
+  /// Laporan yang sudah Done bersifat final dan tidak boleh diubah lagi.
+  bool isReportDone(Map<String, dynamic> report) =>
+      _normalizeStatus(report['status']?.toString()) == 'Done';
+
   String _normalizeStatus(String? status) {
     return switch (status?.trim().toLowerCase()) {
       'done' || 'selesai' => 'Done',
@@ -406,6 +410,8 @@ class TindakanController extends GetxController {
   }
 
   bool addActionItem(String description) {
+    final report = selectedReport.value;
+    if (report != null && isReportDone(report)) return false;
     final text = description.trim();
     if (text.isEmpty) return false;
     actionItems.add({
@@ -420,6 +426,8 @@ class TindakanController extends GetxController {
   }
 
   void toggleActionItem(int index, bool? isDone) {
+    final report = selectedReport.value;
+    if (report != null && isReportDone(report)) return;
     if (index < 0 || index >= actionItems.length) return;
     actionItems[index]['selesai'] = isDone ?? false;
     actionItems.refresh();
@@ -428,6 +436,10 @@ class TindakanController extends GetxController {
   /// Terapkan template berdasarkan ID yang dipilih penindak.
   /// Mengembalikan pesan error, atau null bila berhasil.
   String? applyTemplateById(String? templateId) {
+    final report = selectedReport.value;
+    if (report != null && isReportDone(report)) {
+      return 'Laporan yang sudah Done tidak dapat diubah lagi.';
+    }
     final id = templateId?.trim() ?? '';
     if (id.isEmpty) return 'Pilih template terlebih dahulu.';
     Map<String, dynamic>? template;
@@ -448,6 +460,8 @@ class TindakanController extends GetxController {
   }
 
   void applyTemplate(Map<String, dynamic> template) {
+    final report = selectedReport.value;
+    if (report != null && isReportDone(report)) return;
     final actions = template['list_tindakan'];
     if (actions is! List) return;
     for (final action in actions) {
@@ -460,6 +474,8 @@ class TindakanController extends GetxController {
   }
 
   void removeActionItem(int index) {
+    final report = selectedReport.value;
+    if (report != null && isReportDone(report)) return;
     if (index < 0 || index >= actionItems.length) return;
     actionItems.removeAt(index);
   }
@@ -467,6 +483,9 @@ class TindakanController extends GetxController {
   String? saveAction() {
     final report = selectedReport.value;
     if (report == null) return 'Pilih laporan yang akan ditindaklanjuti.';
+    if (isReportDone(report)) {
+      return 'Laporan yang sudah Done tidak dapat diubah lagi.';
+    }
     if (!canUpdate) {
       return 'Akun Anda tidak memiliki akses untuk menyimpan tindak lanjut.';
     }

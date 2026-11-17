@@ -149,6 +149,51 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('card Laporan Terkirim membuka halaman Laporan', (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(Get.reset);
+
+    await tester.pumpWidget(
+      GetMaterialApp(initialRoute: Routes.DASHBOARD, getPages: AppPages.routes),
+    );
+    await tester.pump(const Duration(seconds: 2));
+
+    await tester.tap(find.text('Laporan Terkirim'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
+
+    expect(Get.currentRoute, Routes.LAPORAN);
+    expect(find.text('Daftar Laporan RS'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('card Pesan Tindakan membuka halaman Tindakan', (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(Get.reset);
+
+    await tester.pumpWidget(
+      GetMaterialApp(initialRoute: Routes.DASHBOARD, getPages: AppPages.routes),
+    );
+    await tester.pump(const Duration(seconds: 2));
+
+    await tester.tap(find.text('Pesan Tindakan'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
+
+    expect(Get.currentRoute, Routes.TINDAKAN);
+    expect(
+      find.text('Pilih laporan pada daftar untuk mengisi tindak lanjut.'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('report form uses two columns on a mobile viewport', (
     tester,
   ) async {
