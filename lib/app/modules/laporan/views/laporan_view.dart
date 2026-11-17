@@ -116,6 +116,11 @@ class _LaporanContentState extends State<_LaporanContent> {
   }
 
   void _loadForEdit(Map<String, dynamic> report) {
+    // Laporan yang sudah Done bersifat final dan tidak boleh diubah lagi.
+    if (_displayStatus(report['status']?.toString()) == 'Done') {
+      _showMessage('Laporan yang sudah Done tidak dapat diubah lagi.');
+      return;
+    }
     setState(() {
       _viewingReport = null;
       _editingReport = report;
@@ -174,6 +179,12 @@ class _LaporanContentState extends State<_LaporanContent> {
   }
 
   void _submitReport() {
+    final editing = _editingReport;
+    if (editing != null &&
+        _displayStatus(editing['status']?.toString()) == 'Done') {
+      _showMessage('Laporan yang sudah Done tidak dapat diubah lagi.');
+      return;
+    }
     final title = _perihalController.text.trim();
     if (title.isEmpty) {
       _showMessage('Perihal wajib diisi.');
@@ -813,7 +824,7 @@ class _LaporanContentState extends State<_LaporanContent> {
       actions: [
         if (isDone && !isValidated && _can('laporan.validasi'))
           _validateButton(report),
-        if (_can('laporan.ubah'))
+        if (_can('laporan.ubah') && !isDone)
           _cardActionButton(
             tooltip: 'Edit laporan',
             onPressed: () => _loadForEdit(report),
@@ -1001,7 +1012,8 @@ class _LaporanContentState extends State<_LaporanContent> {
                         ),
                       ),
                     ),
-                    if (_can('laporan.ubah'))
+                    if (_can('laporan.ubah') &&
+                        _displayStatus(report['status']?.toString()) != 'Done')
                       IconButton(
                         tooltip: 'Edit laporan',
                         onPressed: () => _loadForEdit(report),

@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../global_widgets/filter_menu_button.dart';
 import '../../../global_widgets/main_layout_widget.dart';
 import '../../../global_widgets/report_style_card.dart';
+import '../../../routes/app_pages.dart';
 
 class DashboardView extends GetView<DashboardController> {
   const DashboardView({super.key});
@@ -90,6 +91,7 @@ class DashboardView extends GetView<DashboardController> {
                           'Laporan Terkirim',
                           controller.jumlahLaporan.toString(),
                           AppColors.primary,
+                          onTap: () => Get.offNamed(Routes.LAPORAN),
                         ),
                       ),
                     ),
@@ -100,6 +102,7 @@ class DashboardView extends GetView<DashboardController> {
                           'Pesan Tindakan',
                           controller.jumlahPesanTindakan.toString(),
                           AppColors.warning,
+                          onTap: () => Get.offNamed(Routes.TINDAKAN),
                         ),
                       ),
                     ),
@@ -220,7 +223,12 @@ class DashboardView extends GetView<DashboardController> {
     );
   }
 
-  Widget _buildMetricCard(String title, String value, Color borderColor) {
+  Widget _buildMetricCard(
+    String title,
+    String value,
+    Color borderColor, {
+    VoidCallback? onTap,
+  }) {
     final icon = switch (title) {
       'Laporan Terkirim' => Icons.send_outlined,
       'Pesan Tindakan' => Icons.mark_email_unread_outlined,
@@ -228,53 +236,60 @@ class DashboardView extends GetView<DashboardController> {
       _ => Icons.insights_outlined,
     };
 
-    return Container(
-      constraints: const BoxConstraints(minHeight: 112),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: borderColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: borderColor, size: 21),
+    return Material(
+      color: AppColors.white,
+      borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 112),
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.border),
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  value,
-                  style: const TextStyle(
-                    color: AppColors.textStrong,
-                    fontSize: 25,
-                    fontWeight: FontWeight.w700,
-                  ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: borderColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.textWeak,
-                    fontSize: 12,
-                  ),
+                child: Icon(icon, color: borderColor, size: 21),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      value,
+                      style: const TextStyle(
+                        color: AppColors.textStrong,
+                        fontSize: 25,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.textWeak,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
