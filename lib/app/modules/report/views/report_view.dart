@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:excel/excel.dart' hide Border, BorderStyle;
 import 'package:excel/excel.dart' as excel show Border, BorderStyle;
 import 'package:file_saver/file_saver.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:pdf/pdf.dart';
@@ -39,6 +40,12 @@ class _ReportContent extends StatefulWidget {
 class _ReportContentState extends State<_ReportContent> {
   late final TextEditingController _searchController;
 
+  /// Pengendali gulir horizontal tabel desktop.
+  ///
+  /// Dipakai oleh [Scrollbar] agar posisi tabel selalu terlihat, sehingga
+  /// pengguna tahu masih ada kolom di sisi kanan/kiri.
+  final ScrollController _tableScrollController = ScrollController();
+
   /// ID laporan yang kartunya sedang dibuka (tampilan mobile).
   final Set<String> _expandedReports = {};
 
@@ -61,6 +68,7 @@ class _ReportContentState extends State<_ReportContent> {
   @override
   void dispose() {
     _searchController.dispose();
+    _tableScrollController.dispose();
     super.dispose();
   }
 
@@ -728,62 +736,84 @@ class _ReportContentState extends State<_ReportContent> {
         border: Border.all(color: AppColors.border),
         borderRadius: BorderRadius.circular(10),
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: DataTable(
-          headingRowColor: WidgetStateProperty.all(const Color(0xFFF3F1F6)),
-          columns: const [
-            DataColumn(label: Text('Tanggal Laporan')),
-            DataColumn(label: Text('Tanggal Kejadian')),
-            DataColumn(label: Text('Kategori')),
-            DataColumn(label: Text('Perihal')),
-            DataColumn(label: Text('Pelapor')),
-            DataColumn(label: Text('PIC')),
-            DataColumn(label: Text('Tindakan')),
-            DataColumn(label: Text('Status')),
-            DataColumn(label: Text('Tanggal Mulai Tindak Lanjut')),
-            DataColumn(label: Text('Tanggal Selesai')),
-          ],
-          rows: reports
-              .map(
-                (report) => DataRow(
-                  cells: [
-                    DataCell(
-                      Text(controller.dateText(controller.reportDate(report))),
-                    ),
-                    DataCell(Text(controller.eventDate(report))),
-                    DataCell(Text(controller.category(report))),
-                    DataCell(
-                      SizedBox(
-                        width: 190,
-                        child: Text(
-                          controller.reportTitle(report),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+      child: Scrollbar(
+        controller: _tableScrollController,
+        thumbVisibility: true,
+        scrollbarOrientation: ScrollbarOrientation.bottom,
+        child: ScrollConfiguration(
+          // Izinkan geser tabel memakai drag mouse, bukan hanya trackpad.
+          behavior: ScrollConfiguration.of(context).copyWith(
+            dragDevices: {
+              PointerDeviceKind.touch,
+              PointerDeviceKind.mouse,
+              PointerDeviceKind.trackpad,
+              PointerDeviceKind.stylus,
+            },
+            scrollbars: false,
+          ),
+          child: SingleChildScrollView(
+            controller: _tableScrollController,
+            scrollDirection: Axis.horizontal,
+            // Ruang untuk scrollbar agar tidak menutupi baris terakhir.
+            padding: const EdgeInsets.only(bottom: 12),
+            child: DataTable(
+              headingRowColor: WidgetStateProperty.all(const Color(0xFFF3F1F6)),
+              columns: const [
+                DataColumn(label: Text('Tanggal Laporan')),
+                DataColumn(label: Text('Tanggal Kejadian')),
+                DataColumn(label: Text('Kategori')),
+                DataColumn(label: Text('Perihal')),
+                DataColumn(label: Text('Pelapor')),
+                DataColumn(label: Text('PIC')),
+                DataColumn(label: Text('Tindakan')),
+                DataColumn(label: Text('Status')),
+                DataColumn(label: Text('Tanggal Mulai Tindak Lanjut')),
+                DataColumn(label: Text('Tanggal Selesai')),
+              ],
+              rows: reports
+                  .map(
+                    (report) => DataRow(
+                      cells: [
+                        DataCell(
+                          Text(
+                            controller.dateText(controller.reportDate(report)),
+                          ),
                         ),
-                      ),
-                    ),
-                    DataCell(Text(controller.reporter(report))),
-                    DataCell(
-                      SizedBox(
-                        width: 150,
-                        child: Text(
-                          controller.pic(report),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                        DataCell(Text(controller.eventDate(report))),
+                        DataCell(Text(controller.category(report))),
+                        DataCell(
+                          SizedBox(
+                            width: 190,
+                            child: Text(
+                              controller.reportTitle(report),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
                         ),
-                      ),
+                        DataCell(Text(controller.reporter(report))),
+                        DataCell(
+                          SizedBox(
+                            width: 150,
+                            child: Text(
+                              controller.pic(report),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          SizedBox(width: 240, child: _actionSummary(report)),
+                        ),
+                        DataCell(_statusPill(controller.status(report))),
+                        DataCell(Text(controller.actionStartDate(report))),
+                        DataCell(Text(controller.completionDate(report))),
+                      ],
                     ),
-                    DataCell(
-                      SizedBox(width: 240, child: _actionSummary(report)),
-                    ),
-                    DataCell(_statusPill(controller.status(report))),
-                    DataCell(Text(controller.actionStartDate(report))),
-                    DataCell(Text(controller.completionDate(report))),
-                  ],
-                ),
-              )
-              .toList(),
+                  )
+                  .toList(),
+            ),
+          ),
         ),
       ),
     );

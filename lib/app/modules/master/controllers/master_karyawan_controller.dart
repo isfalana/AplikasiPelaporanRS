@@ -164,6 +164,10 @@ class MasterKaryawanController extends GetxController {
       'id_role': role,
       'nama_unit': unitName(unit),
       'nama_role': roleName(role),
+      // Simpan password agar karyawan baru bisa login pada sesi aplikasi ini.
+      'password': isCreate
+          ? pass
+          : (pass.isNotEmpty ? pass : existing?['password']),
       'last_login': existing?['last_login'],
     };
 
@@ -219,23 +223,6 @@ class MasterKaryawanController extends GetxController {
     } finally {
       isSaving.value = false;
     }
-  }
-
-  /// NIK otomatis berikutnya berdasarkan NIK berurutan yang sudah ada.
-  ///
-  /// Format `NIK-` + nomor 3 digit, misalnya `NIK-005`. Bila daftar masih
-  /// kosong atau tidak ada NIK berformat angka, nomor dimulai dari 001.
-  String generateNik() {
-    var highest = 0;
-    final pattern = RegExp(r'^NIK-(\d+)$', caseSensitive: false);
-    for (final karyawan in listKaryawan) {
-      final match = pattern.firstMatch(
-        karyawan['id_nik']?.toString().trim() ?? '',
-      );
-      final number = int.tryParse(match?.group(1) ?? '');
-      if (number != null && number > highest) highest = number;
-    }
-    return 'NIK-${(highest + 1).toString().padLeft(3, '0')}';
   }
 
   /// Nama unit dari [idUnit], dipakai untuk kolom relasi.
