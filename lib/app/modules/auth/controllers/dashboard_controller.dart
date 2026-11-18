@@ -176,9 +176,9 @@ class DashboardController extends GetxController {
   void logout() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.clear(); // Hapus sesi login
-    if (Get.isRegistered<LaporanController>()) {
-      Get.delete<LaporanController>(force: true);
-    }
+    // Laporan sengaja tidak dihapus: data laporan tersimpan di memori agar PIC
+    // yang login berikutnya tetap bisa menindaklanjuti laporan yang ditujukan
+    // kepadanya.
     Get.offAllNamed(Routes.LOGIN); // Kembali ke halaman login
   }
 }

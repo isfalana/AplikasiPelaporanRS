@@ -585,7 +585,6 @@ class _MasterKaryawanContentState extends State<_MasterKaryawanContent> {
       barrierDismissible: false,
       builder: (context) => _KaryawanFormDialog(
         karyawan: item,
-        suggestedNik: item == null ? controller.generateNik() : null,
         units: controller.listUnit.toList(),
         roles: controller.listRole.toList(),
       ),
@@ -675,13 +674,11 @@ class _MasterKaryawanContentState extends State<_MasterKaryawanContent> {
 class _KaryawanFormDialog extends StatefulWidget {
   const _KaryawanFormDialog({
     this.karyawan,
-    this.suggestedNik,
     required this.units,
     required this.roles,
   });
 
   final Map<String, dynamic>? karyawan;
-  final String? suggestedNik;
   final List<Map<String, dynamic>> units;
   final List<Map<String, dynamic>> roles;
 
@@ -704,7 +701,7 @@ class _KaryawanFormDialogState extends State<_KaryawanFormDialog> {
   void initState() {
     super.initState();
     _nikController = TextEditingController(
-      text: widget.karyawan?['id_nik']?.toString() ?? widget.suggestedNik ?? '',
+      text: widget.karyawan?['id_nik']?.toString() ?? '',
     );
     _nameController = TextEditingController(
       text: widget.karyawan?['nama_karyawan']?.toString() ?? '',
@@ -797,26 +794,14 @@ class _KaryawanFormDialogState extends State<_KaryawanFormDialog> {
                 TextFormField(
                   key: const ValueKey('karyawan_nik_field'),
                   controller: _nikController,
-                  readOnly: true,
+                  // NIK dipakai sebagai ID login, jadi hanya bisa diisi saat
+                  // menambahkan karyawan baru.
+                  readOnly: _isEdit,
                   maxLength: 50,
-                  decoration: _inputDecoration('NIK dibuat otomatis').copyWith(
-                    counterText: '',
-                    filled: true,
-                    fillColor: AppColors.surface,
-                    suffixIcon: Padding(
-                      padding: const EdgeInsets.only(right: 12),
-                      child: Center(
-                        widthFactor: 1,
-                        child: Text(
-                          _isEdit ? 'ID login' : 'Otomatis',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: AppColors.textWeak,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+                  textInputAction: TextInputAction.next,
+                  decoration: _inputDecoration(
+                    _isEdit ? 'NIK tidak dapat diubah' : 'Contoh: NIK-005',
+                  ).copyWith(counterText: ''),
                   validator: (value) {
                     final text = value?.trim() ?? '';
                     if (text.isEmpty) return 'NIK karyawan wajib diisi.';

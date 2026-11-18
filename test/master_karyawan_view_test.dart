@@ -90,15 +90,18 @@ void main() {
       findsOneWidget,
     );
 
-    // NIK dibuat otomatis dan tidak bisa diubah manual.
+    // NIK diisi manual oleh admin, tidak dibuat otomatis.
     final nikField = tester.widget<EditableText>(
       find.descendant(
         of: find.byKey(const ValueKey('karyawan_nik_field')),
         matching: find.byType(EditableText),
       ),
     );
-    expect(nikField.readOnly, isTrue);
-    expect(find.text('NIK-005'), findsOneWidget);
+    expect(nikField.readOnly, isFalse);
+    await tester.enterText(
+      find.byKey(const ValueKey('karyawan_nik_field')),
+      'NIK-005',
+    );
 
     await tester.enterText(
       find.byKey(const ValueKey('karyawan_name_field')),
@@ -144,7 +147,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Ubah karyawan'), findsOneWidget);
-    expect(find.text('ID login'), findsOneWidget);
+    final nikField = tester.widget<TextFormField>(
+      find.byKey(const ValueKey('karyawan_nik_field')),
+    );
+    expect(nikField.controller?.text, 'NIK-004');
 
     await tester.enterText(
       find.byKey(const ValueKey('karyawan_name_field')),
