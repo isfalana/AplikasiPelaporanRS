@@ -49,8 +49,9 @@ class TindakanController extends GetxController {
   ///
   /// Semua status tetap ditampilkan (Open, On Progress, maupun Done) agar
   /// penindak masih bisa melihat riwayat tindakan yang sudah selesai.
-  /// Hanya PIC (atau unit PIC) yang menerima pesan tindakan; unit lain,
-  /// termasuk unit pembuat laporan, tidak melihat laporan ini.
+  /// Bila laporan menunjuk PIC per akun, hanya NIK PIC tersebut yang melihat
+  /// laporan ini; rekan satu unit maupun unit pembuat laporan tidak melihatnya.
+  /// Fallback ke unit hanya dipakai untuk laporan lama yang belum punya NIK PIC.
   List<Map<String, dynamic>> get reportsForCurrentUser {
     if (!canView) return [];
     final reports = laporanController.listLaporan;
@@ -257,9 +258,16 @@ class TindakanController extends GetxController {
     final assignedNiks = (report['id_nik_pic']?.toString() ?? '')
         .split(',')
         .map((value) => value.trim().toLowerCase())
-        .where((value) => value.isNotEmpty);
-    if (nik.isNotEmpty && assignedNiks.contains(nik)) return true;
+        .where((value) => value.isNotEmpty)
+        .toList();
 
+    // Bila pelapor memilih PIC per akun, hanya NIK tersebut yang boleh melihat
+    // dan menindaklanjuti laporan. Rekan satu unit tidak ikut melihat.
+    if (assignedNiks.isNotEmpty) {
+      return nik.isNotEmpty && assignedNiks.contains(nik);
+    }
+
+    // Fallback untuk laporan lama yang hanya menunjuk unit PIC (tanpa NIK).
     final currentUnits = _unitTokens(activeUnit.value);
     if (currentUnits.isEmpty) return false;
     final assignedUnits = [

@@ -26,6 +26,7 @@ class MasterDataStore extends GetxController {
       {'key': 'laporan.ubah', 'label': 'Ubah laporan'},
       {'key': 'laporan.hapus', 'label': 'Hapus laporan'},
       {'key': 'laporan.validasi', 'label': 'Validasi laporan selesai'},
+      {'key': 'laporan.buka_kembali', 'label': 'Buka kembali laporan Done'},
     ],
     'Tindakan': [
       {'key': 'tindakan.lihat', 'label': 'Lihat pesan tindakan'},

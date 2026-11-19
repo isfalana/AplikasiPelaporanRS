@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:aplikasilaporan/app/data/services/master_data_store.dart';
 import 'package:aplikasilaporan/app/routes/app_pages.dart';
 import 'package:aplikasilaporan/app/global_widgets/bukti_preview.dart';
 import 'package:aplikasilaporan/app/global_widgets/report_style_card.dart';
@@ -175,6 +176,105 @@ void main() {
 
     expect(find.text('Laporan hanya untuk unit IT'), findsNothing);
     expect(find.text('Kerusakan AC Ruang IGD'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('rekan satu unit bukan PIC tidak melihat laporan PIC lain', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(Get.reset);
+
+    // Muhammad adalah PIC di Unit IT; user lain (NIK-004) juga di Unit IT.
+    MasterDataStore.ensure().listKaryawan.add({
+      'id_nik': 'NIK-005',
+      'nama_karyawan': 'Muhammad',
+      'id_unit': 'UNIT-IT',
+      'id_role': 'ROLE-01',
+      'last_login': null,
+    });
+    SharedPreferences.setMockInitialValues({
+      'id_nik': 'NIK-004',
+      'unit_name': 'UNIT-IT',
+    });
+
+    final laporanController = Get.put(LaporanController(), permanent: true);
+    laporanController.listLaporan.insert(0, {
+      'id_laporan': 'LAP-PIC-MUHAMMAD',
+      'tgl_laporan': '2026-11-16',
+      'tgl_kejadian': '2026-11-16',
+      'deadline': '2026-11-17',
+      'id_nik_pelapor': 'NIK-002',
+      'nama_pelapor': 'Rina Kartika',
+      'id_unit_pelapor': 'UNIT-UMUM',
+      'nama_unit_pelapor': 'Unit Umum',
+      'id_kategori': 'KAT-01',
+      'id_nik_pic': 'NIK-005',
+      'id_unit_pic': 'UNIT-IT',
+      'id_tindak_lanjut': 'TL-05',
+      'perihal': 'Laporan khusus untuk Muhammad IT',
+      'prioritas': 'Tinggi',
+      'status': 'Open',
+    });
+    laporanController.listLaporan.refresh();
+
+    await tester.pumpWidget(
+      GetMaterialApp(initialRoute: Routes.TINDAKAN, getPages: AppPages.routes),
+    );
+    await tester.pump(const Duration(seconds: 2));
+
+    expect(find.text('Laporan khusus untuk Muhammad IT'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('PIC yang ditunjuk tetap melihat laporannya', (tester) async {
+    tester.view.physicalSize = const Size(1440, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(Get.reset);
+
+    MasterDataStore.ensure().listKaryawan.add({
+      'id_nik': 'NIK-005',
+      'nama_karyawan': 'Muhammad',
+      'id_unit': 'UNIT-IT',
+      'id_role': 'ROLE-01',
+      'last_login': null,
+    });
+    SharedPreferences.setMockInitialValues({
+      'id_nik': 'NIK-005',
+      'unit_name': 'UNIT-IT',
+    });
+
+    final laporanController = Get.put(LaporanController(), permanent: true);
+    laporanController.listLaporan.insert(0, {
+      'id_laporan': 'LAP-PIC-MUHAMMAD',
+      'tgl_laporan': '2026-11-16',
+      'tgl_kejadian': '2026-11-16',
+      'deadline': '2026-11-17',
+      'id_nik_pelapor': 'NIK-002',
+      'nama_pelapor': 'Rina Kartika',
+      'id_unit_pelapor': 'UNIT-UMUM',
+      'nama_unit_pelapor': 'Unit Umum',
+      'id_kategori': 'KAT-01',
+      'id_nik_pic': 'NIK-005',
+      'id_unit_pic': 'UNIT-IT',
+      'id_tindak_lanjut': 'TL-05',
+      'perihal': 'Laporan khusus untuk Muhammad IT',
+      'prioritas': 'Tinggi',
+      'status': 'Open',
+    });
+    laporanController.listLaporan.refresh();
+
+    await tester.pumpWidget(
+      GetMaterialApp(initialRoute: Routes.TINDAKAN, getPages: AppPages.routes),
+    );
+    await tester.pump(const Duration(seconds: 2));
+
+    expect(find.text('Laporan khusus untuk Muhammad IT'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 
