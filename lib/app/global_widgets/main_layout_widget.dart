@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../core/theme/app_colors.dart';
+import '../data/services/master_data_store.dart';
 import '../modules/auth/controllers/dashboard_controller.dart';
 import 'sidebar_widgets.dart';
 
@@ -130,13 +131,21 @@ class MainLayoutWidget extends StatelessWidget {
     required bool isCollapsed,
     required bool isMobile,
   }) {
-    return Obx(
-      () => SidebarWidget(
+    return Obx(() {
+      final activeNik = dashboardController.activeNik.value.trim();
+      final store = MasterDataStore.ensure();
+      final roleName = activeNik.isEmpty
+          ? ''
+          : store.roleName(store.employeeRole(activeNik));
+
+      return SidebarWidget(
         isCollapsed: isCollapsed,
         isMobile: isMobile,
         currentRoute: Get.currentRoute,
         unitName: dashboardController.unitName.value,
         employeeName: dashboardController.employeeName.value,
+        employeeNik: activeNik,
+        roleName: roleName,
         isMasterExpanded: dashboardController.isMasterExpanded.value,
         permissions: dashboardController.permissions,
         onLogout: dashboardController.logout,
@@ -148,7 +157,7 @@ class MainLayoutWidget extends StatelessWidget {
             dashboardController.isMasterExpanded.toggle();
           }
         },
-      ),
-    );
+      );
+    });
   }
 }

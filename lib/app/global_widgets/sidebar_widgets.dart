@@ -42,6 +42,8 @@ class SidebarWidget extends StatelessWidget {
     required this.currentRoute,
     required this.unitName,
     required this.employeeName,
+    required this.employeeNik,
+    required this.roleName,
     required this.isMasterExpanded,
     required this.permissions,
     required this.onMasterMenuTap,
@@ -54,6 +56,8 @@ class SidebarWidget extends StatelessWidget {
   final String currentRoute;
   final String unitName;
   final String employeeName;
+  final String employeeNik;
+  final String roleName;
   final bool isMasterExpanded;
   final Set<String> permissions;
   final VoidCallback onMasterMenuTap;
@@ -196,7 +200,14 @@ class SidebarWidget extends StatelessWidget {
             constraints: const BoxConstraints(minWidth: 230),
             onSelected: (value) {
               if (value == 'profile') {
-                _showProfile(context, profileName, unitName, initials);
+                _showProfile(
+                  context,
+                  name: profileName,
+                  unit: unitName,
+                  nik: employeeNik,
+                  role: roleName,
+                  initials: initials,
+                );
               } else if (value == 'logout') {
                 onLogout();
               }
@@ -345,69 +356,202 @@ class SidebarWidget extends StatelessWidget {
   }
 
   void _showProfile(
-    BuildContext context,
-    String name,
-    String unit,
-    String initials,
-  ) {
+    BuildContext context, {
+    required String name,
+    required String unit,
+    required String nik,
+    required String role,
+    required String initials,
+  }) {
+    final displayName = name.trim().isEmpty ? 'Pengguna' : name.trim();
     showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Profil pengguna'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircleAvatar(
-              radius: 28,
-              backgroundColor: AppColors.primary.withValues(alpha: 0.12),
-              child: Text(
-                initials.isEmpty ? 'P' : initials,
-                style: const TextStyle(
-                  color: AppColors.primary,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
+      builder: (context) => Dialog(
+        backgroundColor: AppColors.white,
+        surfaceTintColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 16, 16, 0),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Profil pengguna',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textWeak,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Tutup profil',
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close_rounded, size: 20),
+                        color: AppColors.textWeak,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 4, 24, 24),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 56,
+                        height: 56,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.10),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: AppColors.primary.withValues(alpha: 0.18),
+                          ),
+                        ),
+                        child: Text(
+                          initials.isEmpty ? 'P' : initials,
+                          style: const TextStyle(
+                            color: AppColors.primary,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              displayName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textStrong,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              unit.trim().isEmpty
+                                  ? 'Unit belum diatur'
+                                  : unit.trim(),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textWeak,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1, color: AppColors.border),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Column(
+                    children: [
+                      _profileRow(Icons.badge_outlined, 'NIK', nik),
+                      const Divider(height: 1, color: AppColors.border),
+                      _profileRow(Icons.apartment_rounded, 'Unit', unit),
+                      const Divider(height: 1, color: AppColors.border),
+                      _profileRow(Icons.shield_outlined, 'Role', role),
+                      const Divider(height: 1, color: AppColors.border),
+                      _profileRow(
+                        Icons.check_circle_outline_rounded,
+                        'Status',
+                        'Aktif',
+                        accent: AppColors.success,
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.textStrong,
+                      side: const BorderSide(color: AppColors.divider),
+                      minimumSize: const Size.fromHeight(42),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: const Text('Tutup'),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            _profileValue('Nama', name.isEmpty ? 'Pengguna' : name),
-            const SizedBox(height: 12),
-            _profileValue('Unit', unit),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Tutup'),
           ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _profileValue(String label, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            label,
-            style: const TextStyle(color: AppColors.textWeak, fontSize: 12),
+  Widget _profileRow(
+    IconData icon,
+    String label,
+    String value, {
+    Color? accent,
+  }) {
+    final text = value.trim().isEmpty ? '-' : value.trim();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Icon(icon, size: 17, color: accent ?? AppColors.primary),
           ),
-        ),
-        const SizedBox(height: 4),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            value.isEmpty ? '-' : value,
-            style: const TextStyle(
-              color: AppColors.textStrong,
-              fontWeight: FontWeight.w600,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textWeak,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  text,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                    color: accent ?? AppColors.textStrong,
+                  ),
+                ),
+              ],
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 

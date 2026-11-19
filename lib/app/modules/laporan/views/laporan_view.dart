@@ -80,6 +80,16 @@ class _LaporanContentState extends State<_LaporanContent> {
     return Get.find<DashboardController>().can(permission);
   }
 
+  /// Cek izin buka kembali langsung dari data karyawan aktif.
+  ///
+  /// Sengaja tidak memakai fallback [_can] yang mengizinkan semua saat sesi
+  /// belum termuat, supaya role tanpa izin tidak sempat melihat aksi ini.
+  bool _canReopen() {
+    final nik = _activeNik.trim();
+    if (nik.isEmpty) return false;
+    return controller.master.hasPermission(nik, 'laporan.buka_kembali');
+  }
+
   @override
   void dispose() {
     _perihalController.dispose();
@@ -375,6 +385,82 @@ class _LaporanContentState extends State<_LaporanContent> {
       'Laporan dan tindak lanjut dinyatakan selesai oleh pelapor.',
       snackPosition: SnackPosition.BOTTOM,
       backgroundColor: AppColors.success,
+      colorText: AppColors.white,
+      margin: const EdgeInsets.all(16),
+    );
+  }
+
+  /// Membuka kembali laporan yang sudah Done agar bisa diperbaiki lagi.
+  ///
+  /// Hanya role dengan izin `laporan.buka_kembali` (misalnya superadmin) yang
+  /// dapat melakukan ini. Status dikembalikan ke On Progress dan validasi
+  /// pelapor direset supaya laporan serta tindak lanjutnya bisa diubah.
+  Future<void> _confirmReopen(Map<String, dynamic> report) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text(
+          'Buka kembali laporan?',
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textStrong,
+          ),
+        ),
+        content: Text(
+          'Laporan ${report['id_laporan'] ?? ''} akan dibuka kembali dengan '
+          'status On Progress. Validasi pelapor akan direset sehingga laporan '
+          'dan tindak lanjutnya dapat diperbaiki lagi.',
+          style: const TextStyle(
+            fontSize: 13,
+            color: AppColors.textWeak,
+            height: 1.5,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            style: TextButton.styleFrom(foregroundColor: AppColors.textWeak),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.warning,
+              backgroundColor: AppColors.warning.withValues(alpha: 0.08),
+            ),
+            child: const Text('Buka kembali'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final id = report['id_laporan']?.toString();
+    var target = report;
+    for (final item in controller.listLaporan) {
+      if (item['id_laporan']?.toString() == id) {
+        target = item;
+        break;
+      }
+    }
+    target['status'] = 'On Progress';
+    target['validasi_pelapor'] = false;
+    target.remove('tgl_validasi');
+    target.remove('validasi_by');
+    target.remove('nama_validasi_by');
+    target.remove('tgl_selesai');
+    controller.listLaporan.refresh();
+
+    if (!mounted) return;
+    setState(() {});
+    Get.snackbar(
+      'Laporan dibuka kembali',
+      'Status laporan kembali ke On Progress dan validasi pelapor direset.',
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: AppColors.warning,
       colorText: AppColors.white,
       margin: const EdgeInsets.all(16),
     );
@@ -824,6 +910,16 @@ class _LaporanContentState extends State<_LaporanContent> {
       actions: [
         if (isDone && !isValidated && _can('laporan.validasi'))
           _validateButton(report),
+        if (isDone && _canReopen())
+          _cardActionButton(
+            tooltip: 'Buka kembali laporan',
+            onPressed: () => _confirmReopen(report),
+            icon: const Icon(
+              Icons.lock_open_outlined,
+              size: 17,
+              color: AppColors.warning,
+            ),
+          ),
         if (_can('laporan.ubah') && !isDone)
           _cardActionButton(
             tooltip: 'Edit laporan',
@@ -1022,6 +1118,17 @@ class _LaporanContentState extends State<_LaporanContent> {
                           color: AppColors.primary,
                         ),
                       ),
+                    if (_displayStatus(report['status']?.toString()) ==
+                            'Done' &&
+                        _canReopen())
+                      IconButton(
+                        tooltip: 'Buka kembali laporan',
+                        onPressed: () => _confirmReopen(report),
+                        icon: const Icon(
+                          Icons.lock_open_outlined,
+                          color: AppColors.warning,
+                        ),
+                      ),
                     _statusPill(_displayStatus(report['status']?.toString())),
                   ],
                 ),
@@ -1217,6 +1324,18 @@ class _LaporanContentState extends State<_LaporanContent> {
               style: AppButtons.primary,
               icon: const Icon(Icons.how_to_reg_outlined, size: 17),
               label: const Text('Validasi sebagai Pelapor'),
+            ),
+          ],
+          if (_canReopen()) ...[
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () => _confirmReopen(report),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.warning,
+                side: const BorderSide(color: AppColors.warning),
+              ),
+              icon: const Icon(Icons.lock_open_outlined, size: 17),
+              label: const Text('Buka kembali laporan'),
             ),
           ],
         ],

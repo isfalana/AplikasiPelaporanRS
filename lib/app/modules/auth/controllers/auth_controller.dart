@@ -3,27 +3,21 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 // import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 // import 'package:firebase_messaging/firebase_messaging.dart';
 // import '../../../data/services/api_services.dart';
+import '../../../data/services/master_data_store.dart';
 import '../../../routes/app_pages.dart';
 
 class AuthController extends GetxController {
   static const demoAccounts = <String, Map<String, String>>{
-    'NIK-002': {
-      'password': '123456',
-      'name': 'PIC Umum',
-      'unit': 'UNIT-UMUM',
-    },
-    'NIK-004': {
-      'password': '123456',
-      'name': 'PIC IT',
-      'unit': 'UNIT-IT',
-    },
+    'NIK-002': {'password': '123456', 'name': 'PIC Umum', 'unit': 'UNIT-UMUM'},
+    'NIK-004': {'password': '123456', 'name': 'PIC IT', 'unit': 'UNIT-IT'},
   };
 
   final usernameController = TextEditingController();
   final passwordController = TextEditingController();
-  
+
   var isLoading = false.obs;
   var isPasswordHidden = true.obs;
 
@@ -38,7 +32,7 @@ class AuthController extends GetxController {
 
   // Future<void> login() async {
   //   if (usernameController.text.isEmpty || passwordController.text.isEmpty) {
-  //     Get.snackbar('Error', 'Username dan Password tidak boleh kosong', 
+  //     Get.snackbar('Error', 'Username dan Password tidak boleh kosong',
   //         backgroundColor: Colors.redAccent, colorText: Colors.white);
   //     return;
   //   }
@@ -49,9 +43,9 @@ class AuthController extends GetxController {
   //     String? fcmToken;
   //     try {
   //       if (kIsWeb) {
-  //         fcmToken = "dummy_fcm_token_web"; 
+  //         fcmToken = "dummy_fcm_token_web";
   //       } else {
-  //         fcmToken = await FirebaseMessaging.instance.getToken(); 
+  //         fcmToken = await FirebaseMessaging.instance.getToken();
   //       }
   //     } catch (e) {
   //       debugPrint('FCM Error: $e');
@@ -71,15 +65,15 @@ class AuthController extends GetxController {
   //       String token = response.data['token'];
   //       String namaUnit = response.data['data']['nama_unit'] ?? 'Unit';
   //       String idNik = response.data['data']['id_nik'];
-        
+
   //       SharedPreferences prefs = await SharedPreferences.getInstance();
   //       await prefs.setString('jwt_token', token);
   //       await prefs.setString('unit_name', namaUnit);
   //       await prefs.setString('id_nik', idNik);
 
-  //       Get.snackbar('Sukses', 'Berhasil Login sebagai $namaUnit', 
+  //       Get.snackbar('Sukses', 'Berhasil Login sebagai $namaUnit',
   //           backgroundColor: Colors.green, colorText: Colors.white);
-        
+
   //       Get.offAllNamed(Routes.DASHBOARD);
   //     }
   //   } on DioException catch (e) {
@@ -87,10 +81,10 @@ class AuthController extends GetxController {
   //     if (e.response != null && e.response?.data != null) {
   //        errorMessage = e.response?.data['message'] ?? errorMessage;
   //     }
-  //     Get.snackbar('Login Gagal', errorMessage, 
+  //     Get.snackbar('Login Gagal', errorMessage,
   //         backgroundColor: Colors.redAccent, colorText: Colors.white);
   //   } catch (e) {
-  //     Get.snackbar('Error', 'Terjadi kesalahan sistem: $e', 
+  //     Get.snackbar('Error', 'Terjadi kesalahan sistem: $e',
   //         backgroundColor: Colors.redAccent, colorText: Colors.white);
   //   } finally {
   //     isLoading.value = false;
@@ -101,48 +95,90 @@ class AuthController extends GetxController {
     final nik = usernameController.text.trim().toUpperCase();
     final password = passwordController.text;
     if (nik.isEmpty || password.isEmpty) {
-      Get.snackbar('Error', 'Username dan Password tidak boleh kosong', 
-          backgroundColor: Colors.redAccent, colorText: Colors.white);
-      return;
-    }
-
-    final account = demoAccounts[nik];
-    if (account == null || account['password'] != password) {
       Get.snackbar(
-        'Login gagal',
-        'Gunakan salah satu akun demo yang tersedia.',
+        'Error',
+        'Username dan Password tidak boleh kosong',
         backgroundColor: Colors.redAccent,
         colorText: Colors.white,
       );
       return;
     }
 
+    final account = demoAccounts[nik];
+    final store = MasterDataStore.ensure();
+    final employee = store.employee(nik);
+    final storedPassword = employee?['password']?.toString() ?? '';
+
+    // Akun demo tetap memakai nama/unit demo agar perilaku lama tidak berubah.
+    // Karyawan yang ditambahkan lewat Master Karyawan memakai data dari store.
+    String? name;
+    String? unit;
+    if (account != null && account['password'] == password) {
+      name = account['name'];
+      unit = account['unit'];
+    } else if (employee != null &&
+        storedPassword.isNotEmpty &&
+        storedPassword == password) {
+      name = employee['nama_karyawan']?.toString().trim() ?? '';
+      unit = store.unitName(employee['id_unit']?.toString() ?? '');
+    }
+
+    if (name == null) {
+      Get.snackbar(
+        'Login gagal',
+        'NIK atau password salah. Gunakan akun yang terdaftar.',
+        backgroundColor: Colors.redAccent,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
+    final displayName = name.trim().isEmpty ? nik : name.trim();
+    final displayUnit = (unit ?? '').trim().isEmpty ? 'Unit' : unit!.trim();
+
     isLoading.value = true;
     try {
       // --- SIMULASI LOGIN LOKAL (TANPA KE BACKEND) ---
-      await Future.delayed(const Duration(milliseconds: 800)); // Efek loading sebentar
+      await Future.delayed(
+        const Duration(milliseconds: 800),
+      ); // Efek loading sebentar
 
       // Simulasi simpan data dummy ke SharedPreferences (biar aman kalau halaman lain butuh)
       SharedPreferences prefs = await SharedPreferences.getInstance();
       await prefs.setString('jwt_token', 'dummy_token_12345');
-      await prefs.setString('unit_name', account['unit']!);
+      await prefs.setString('unit_name', displayUnit);
       await prefs.setString('id_nik', nik);
-      await prefs.setString('nama_karyawan', account['name']!);
+      await prefs.setString('nama_karyawan', displayName);
 
-      Get.snackbar('Sukses (Mock Mode)', 'Berhasil Login sebagai ${account['name']}!',
-          backgroundColor: Colors.green, colorText: Colors.white);
-      
+      // Catat waktu login terakhir pada data karyawan di memori supaya kolom
+      // "Login terakhir" di Master Karyawan langsung terisi meski belum ada
+      // database.
+      if (employee != null) {
+        employee['last_login'] = DateTime.now().toIso8601String();
+        store.listKaryawan.refresh();
+      }
+
+      Get.snackbar(
+        'Sukses (Mock Mode)',
+        'Berhasil Login sebagai $displayName!',
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+      );
+
       // Langsung meluncur ke Dashboard!
       Get.offAllNamed(Routes.DASHBOARD);
-
     } catch (e) {
-      Get.snackbar('Error', 'Terjadi kesalahan sistem: $e', 
-          backgroundColor: Colors.redAccent, colorText: Colors.white);
+      Get.snackbar(
+        'Error',
+        'Terjadi kesalahan sistem: $e',
+        backgroundColor: Colors.redAccent,
+        colorText: Colors.white,
+      );
     } finally {
       isLoading.value = false;
     }
   }
-  
+
   @override
   void onClose() {
     usernameController.dispose();

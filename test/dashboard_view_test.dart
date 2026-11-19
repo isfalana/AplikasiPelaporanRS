@@ -72,6 +72,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(Get.reset);
     SharedPreferences.setMockInitialValues({
+      'id_nik': 'NIK-002',
       'nama_karyawan': 'Siti Permata',
       'unit_name': 'UNIT-IGD',
     });
@@ -88,6 +89,9 @@ void main() {
     expect(find.text('Profil pengguna'), findsOneWidget);
     expect(find.text('Siti Permata'), findsWidgets);
     expect(find.text('UNIT-IGD'), findsWidgets);
+    expect(find.text('NIK-002'), findsOneWidget);
+    expect(find.text('superadmin'), findsOneWidget);
+    expect(find.text('Aktif'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
