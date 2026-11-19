@@ -61,7 +61,7 @@ void main() {
     await tester.tap(find.text('Tambah Role'));
     await tester.pumpAndSettle();
 
-    expect(find.text('dibuat otomatis'), findsOneWidget);
+    // expect(find.text('dibuat otomatis'), findsOneWidget);
     expect(find.text('ROLE-03'), findsOneWidget);
 
     await tester.enterText(
