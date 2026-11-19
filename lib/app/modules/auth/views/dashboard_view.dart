@@ -65,7 +65,7 @@ class DashboardView extends GetView<DashboardController> {
               children: [
                 Obx(
                   () => Text(
-                    'Selamat datang, ${controller.unitName.value}',
+                    'Selamat datang, ${controller.employeeName.value}',
                     style: const TextStyle(
                       color: AppColors.textStrong,
                       fontSize: 23,

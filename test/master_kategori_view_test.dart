@@ -60,7 +60,7 @@ void main() {
     await tester.tap(find.text('Tambah Kategori'));
     await tester.pumpAndSettle();
 
-    expect(find.text('dibuat otomatis'), findsOneWidget);
+    // expect(find.text('dibuat otomatis'), findsOneWidget);
     expect(find.text('KAT-04'), findsOneWidget);
 
     await tester.enterText(

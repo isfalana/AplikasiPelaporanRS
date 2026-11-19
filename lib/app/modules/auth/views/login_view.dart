@@ -386,7 +386,7 @@ class _LoginForm extends StatelessWidget {
           ),
         ),
         SizedBox(height: compact ? 26 : 32),
-        const _FieldLabel('Username'),
+        const _FieldLabel('NIK'),
         const SizedBox(height: 7),
         TextField(
           controller: controller.usernameController,
@@ -397,7 +397,7 @@ class _LoginForm extends StatelessWidget {
           ),
           cursorColor: AppColors.primary,
           decoration: _inputDecoration(
-            hint: 'Masukkan username',
+            hint: 'Masukkan NIK Anda',
             icon: Icons.person_outline_rounded,
           ),
         ),
