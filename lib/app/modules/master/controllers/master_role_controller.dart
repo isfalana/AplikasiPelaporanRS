@@ -12,7 +12,8 @@ import '../../../data/services/master_data_store.dart';
 /// terhubung, halaman memakai data contoh dari [MasterDataStore] supaya tetap
 /// bisa dipakai dan tetap terhubung dengan dropdown role karyawan.
 class MasterRoleController extends GetxController {
-  static const _endpoint = '/role';
+  // [MODIFIKASI] Endpoint diselaraskan dengan backend masterRoutes.js (/master/roles)
+  static const _endpoint = '/master/roles';
 
   MasterDataStore get _store => MasterDataStore.ensure();
 
@@ -41,24 +42,21 @@ class MasterRoleController extends GetxController {
     }).toList();
   }
 
-  /// Buat ID role baru yang belum dipakai, misalnya `ROLE-05`.
+  /// [MODIFIKASI] Buat ID role baru yang melanjutkan nomor tertinggi (MAX + 1)
+  /// agar data role yang sudah di-soft-delete tidak tertimpa dan tetap berfungsi sebagai riwayat (audit trail).
   String generateRoleId() {
-    final used = listRole
-        .map((role) => role['id_role']?.toString().toUpperCase() ?? '')
-        .toSet();
-    var next = listRole.isEmpty ? 1 : listRole.length + 1;
-    for (final id in used) {
-      final match = RegExp(r'^ROLE-(\d+)$').firstMatch(id);
-      final number = int.tryParse(match?.group(1) ?? '');
-      if (number != null && number >= next) next = number + 1;
+    var maxNumber = 0;
+    for (final role in listRole) {
+      final id = role['id_role']?.toString().toUpperCase() ?? '';
+      final match = RegExp(r'^(?:ROLE|R)-?(\d+)$').firstMatch(id);
+      if (match != null) {
+        final number = int.tryParse(match.group(1)!);
+        if (number != null && number > maxNumber) {
+          maxNumber = number;
+        }
+      }
     }
-
-    var candidate = 'ROLE-${next.toString().padLeft(2, '0')}';
-    while (used.contains(candidate)) {
-      next++;
-      candidate = 'ROLE-${next.toString().padLeft(2, '0')}';
-    }
-    return candidate;
+    return 'ROLE-${(maxNumber + 1).toString().padLeft(2, '0')}';
   }
 
   Future<void> fetchRole() async {
@@ -114,20 +112,21 @@ class MasterRoleController extends GetxController {
 
     isSaving.value = true;
     try {
-      if (!usingDemoData.value) {
-        final dio = await ApiService.getClient();
-        final data = <String, dynamic>{
-          'id_role': id,
-          'nama_role': nama,
-          'permissions': selectedPermissions,
-        };
-        if (isCreate) {
-          await dio.post(_endpoint, data: data);
-        } else {
-          await dio.put('$_endpoint/$originalId', data: data);
-        }
+      // [MODIFIKASI] Selalu simpan role beserta daftar hak akses (permissions) ke endpoint backend /master/roles
+      final dio = await ApiService.getClient();
+      final data = <String, dynamic>{
+        'id_role': id,
+        'nama_role': nama,
+        'deskripsi': nama,
+        'permissions': selectedPermissions,
+      };
+      if (isCreate) {
+        await dio.post(_endpoint, data: data);
+      } else {
+        await dio.put('$_endpoint/$originalId', data: data);
       }
       _applyLocally(originalId: originalId, row: row);
+      await MasterDataStore.ensure().fetchFromBackend();
       return null;
     } on DioException catch (error) {
       return _errorMessage(error, 'Gagal menyimpan role.');
@@ -163,12 +162,12 @@ class MasterRoleController extends GetxController {
 
     isSaving.value = true;
     try {
-      if (!usingDemoData.value) {
-        final dio = await ApiService.getClient();
-        await dio.delete('$_endpoint/$id');
-      }
+      // [MODIFIKASI] Hapus role dari database backend
+      final dio = await ApiService.getClient();
+      await dio.delete('$_endpoint/$id');
       listRole.removeWhere((role) => role['id_role']?.toString() == id);
       listRole.refresh();
+      await MasterDataStore.ensure().fetchFromBackend();
       return null;
     } on DioException catch (error) {
       return _errorMessage(error, 'Gagal menghapus role.');

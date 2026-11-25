@@ -3,6 +3,18 @@ import 'package:get/get.dart';
 
 import '../core/theme/app_colors.dart';
 import '../routes/app_pages.dart';
+// [MODIFIKASI] Import controller untuk fungsi reset tampilan awal menu
+import '../modules/auth/controllers/dashboard_controller.dart';
+import '../modules/laporan/controllers/laporan_controller.dart';
+import '../modules/tindakan/controllers/tindakan_controller.dart';
+import '../modules/report/controllers/report_controller.dart';
+import '../modules/master/controllers/master_unit_controller.dart';
+import '../modules/master/controllers/master_karyawan_controller.dart';
+import '../modules/master/controllers/master_kategori_controller.dart';
+import '../modules/master/controllers/master_template_tindakan_controller.dart';
+import '../modules/master/controllers/master_role_controller.dart';
+// [MODIFIKASI] Import password_requirement_widget untuk menampilkan dialog reset kata sandi pada profil user
+import 'password_requirement_widget.dart';
 
 class SidebarWidget extends StatelessWidget {
   static const backgroundColor = AppColors.sidebarDark;
@@ -208,6 +220,9 @@ class SidebarWidget extends StatelessWidget {
                   role: roleName,
                   initials: initials,
                 );
+              // [MODIFIKASI] Aksi untuk membuka dialog reset kata sandi dari popup akun
+              } else if (value == 'reset_password') {
+                showResetPasswordDialog(context, initialNik: employeeNik);
               } else if (value == 'logout') {
                 onLogout();
               }
@@ -260,6 +275,29 @@ class SidebarWidget extends StatelessWidget {
                     SizedBox(width: 12),
                     Text(
                       'Lihat profil',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textStrong,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // [MODIFIKASI] Opsi Lupa/Reset kata sandi pada menu profil user
+              const PopupMenuItem(
+                value: 'reset_password',
+                height: 46,
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.lock_reset_rounded,
+                      size: 19,
+                      color: AppColors.primary,
+                    ),
+                    SizedBox(width: 12),
+                    Text(
+                      'Lupa / Reset kata sandi',
                       style: TextStyle(
                         fontSize: 13,
                         color: AppColors.textStrong,
@@ -481,17 +519,39 @@ class SidebarWidget extends StatelessWidget {
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.textStrong,
-                      side: const BorderSide(color: AppColors.divider),
-                      minimumSize: const Size.fromHeight(42),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+                  child: Column(
+                    children: [
+                      // [MODIFIKASI] Tombol Lupa/Reset Kata Sandi pada dialog profil user
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          showResetPasswordDialog(context, initialNik: nik);
+                        },
+                        icon: const Icon(Icons.lock_reset_rounded, size: 18),
+                        label: const Text('Lupa / Reset Kata Sandi'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          side: const BorderSide(color: AppColors.primary),
+                          minimumSize: const Size.fromHeight(42),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
                       ),
-                    ),
-                    child: const Text('Tutup'),
+                      const SizedBox(height: 10),
+                      OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.textStrong,
+                          side: const BorderSide(color: AppColors.divider),
+                          minimumSize: const Size.fromHeight(42),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: const Text('Tutup'),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -719,6 +779,10 @@ class SidebarWidget extends StatelessWidget {
   }
 
   void _openDashboard() {
+    // [MODIFIKASI] Reset tampilan awal dashboard
+    if (Get.isRegistered<DashboardController>()) {
+      Get.find<DashboardController>().resetToInitialView();
+    }
     if (currentRoute == Routes.DASHBOARD) {
       if (isMobile) {
         Get.back();
@@ -733,6 +797,10 @@ class SidebarWidget extends StatelessWidget {
   }
 
   void _openReports() {
+    // [MODIFIKASI] Reset tampilan awal laporan: tutup detail/edit dan tampilkan daftar laporan bersih
+    if (Get.isRegistered<LaporanController>()) {
+      Get.find<LaporanController>().resetToInitialView();
+    }
     if (currentRoute == Routes.LAPORAN) {
       if (isMobile) {
         Get.back();
@@ -747,6 +815,10 @@ class SidebarWidget extends StatelessWidget {
   }
 
   void _openActions() {
+    // [MODIFIKASI] Reset tampilan awal tindakan: bersihkan form dan pilih laporan default
+    if (Get.isRegistered<TindakanController>()) {
+      Get.find<TindakanController>().resetToInitialView();
+    }
     if (currentRoute == Routes.TINDAKAN) {
       if (isMobile) Get.back();
       return;
@@ -759,6 +831,10 @@ class SidebarWidget extends StatelessWidget {
   }
 
   void _openReport() {
+    // [MODIFIKASI] Reset tampilan awal rekap/report
+    if (Get.isRegistered<ReportController>()) {
+      Get.find<ReportController>().resetToInitialView();
+    }
     if (currentRoute == Routes.REPORT) {
       if (isMobile) Get.back();
       return;
@@ -769,6 +845,11 @@ class SidebarWidget extends StatelessWidget {
   }
 
   void _openMasterUnit() {
+    if (Get.isRegistered<MasterUnitController>()) {
+      final c = Get.find<MasterUnitController>();
+      c.searchQuery.value = '';
+      c.fetchUnits();
+    }
     if (currentRoute == Routes.MASTER_UNIT) {
       if (isMobile) Get.back();
       return;
@@ -779,6 +860,11 @@ class SidebarWidget extends StatelessWidget {
   }
 
   void _openMasterKaryawan() {
+    if (Get.isRegistered<MasterKaryawanController>()) {
+      final c = Get.find<MasterKaryawanController>();
+      c.searchQuery.value = '';
+      c.fetchAll();
+    }
     if (currentRoute == Routes.MASTER_KARYAWAN) {
       if (isMobile) Get.back();
       return;
@@ -789,6 +875,11 @@ class SidebarWidget extends StatelessWidget {
   }
 
   void _openMasterKategori() {
+    if (Get.isRegistered<MasterKategoriController>()) {
+      final c = Get.find<MasterKategoriController>();
+      c.searchQuery.value = '';
+      c.fetchKategori();
+    }
     if (currentRoute == Routes.MASTER_KATEGORI) {
       if (isMobile) Get.back();
       return;
@@ -799,6 +890,11 @@ class SidebarWidget extends StatelessWidget {
   }
 
   void _openMasterTemplateTindakan() {
+    if (Get.isRegistered<MasterTemplateTindakanController>()) {
+      final c = Get.find<MasterTemplateTindakanController>();
+      c.searchQuery.value = '';
+      c.fetchTemplate();
+    }
     if (currentRoute == Routes.MASTER_TEMPLATE_TINDAKAN) {
       if (isMobile) Get.back();
       return;
@@ -809,6 +905,11 @@ class SidebarWidget extends StatelessWidget {
   }
 
   void _openMasterRole() {
+    if (Get.isRegistered<MasterRoleController>()) {
+      final c = Get.find<MasterRoleController>();
+      c.searchQuery.value = '';
+      c.fetchRole();
+    }
     if (currentRoute == Routes.MASTER_ROLE) {
       if (isMobile) Get.back();
       return;

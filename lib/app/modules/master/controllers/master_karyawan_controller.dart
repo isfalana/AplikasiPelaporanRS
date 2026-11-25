@@ -12,9 +12,10 @@ import '../../../data/services/master_data_store.dart';
 /// contoh dari [MasterDataStore] supaya tetap bisa dipakai dan tetap
 /// terhubung dengan halaman master lainnya.
 class MasterKaryawanController extends GetxController {
-  static const _usersEndpoint = '/users';
-  static const _unitEndpoint = '/unit';
-  static const _roleEndpoint = '/role';
+  // [MODIFIKASI] Endpoint diselaraskan dengan backend masterRoutes.js
+  static const _usersEndpoint = '/master/users';
+  static const _unitEndpoint = '/master/units';
+  static const _roleEndpoint = '/master/roles';
 
   MasterDataStore get _store => MasterDataStore.ensure();
 
@@ -30,10 +31,6 @@ class MasterKaryawanController extends GetxController {
   final isSaving = false.obs;
   final usingDemoData = false.obs;
   final searchQuery = ''.obs;
-
-  /// Apakah daftar karyawan berasal dari server. Bila false, perubahan data
-  /// hanya disimpan di memori (mode contoh).
-  bool _usersFromServer = false;
 
   @override
   void onInit() {
@@ -64,7 +61,6 @@ class MasterKaryawanController extends GetxController {
     if (isLoading.value) return;
     isLoading.value = true;
     var usersDemo = false;
-    _usersFromServer = false;
     try {
       final dio = await ApiService.getClient();
 
@@ -75,7 +71,6 @@ class MasterKaryawanController extends GetxController {
             .toList();
         if (rows.isNotEmpty) {
           listKaryawan.assignAll(rows);
-          _usersFromServer = true;
         } else {
           usersDemo = true;
         }
@@ -173,22 +168,22 @@ class MasterKaryawanController extends GetxController {
 
     isSaving.value = true;
     try {
-      if (_usersFromServer) {
-        final dio = await ApiService.getClient();
-        final data = <String, dynamic>{
-          'id_nik': row['id_nik'],
-          'nama_karyawan': nama,
-          'id_unit': unit.isEmpty ? null : unit,
-          'id_role': role.isEmpty ? null : role,
-          if (isCreate || pass.isNotEmpty) 'password': pass,
-        };
-        if (isCreate) {
-          await dio.post(_usersEndpoint, data: data);
-        } else {
-          await dio.put('$_usersEndpoint/${row['id_nik']}', data: data);
-        }
+      // [MODIFIKASI] Selalu simpan karyawan ke backend API /master/users
+      final dio = await ApiService.getClient();
+      final data = <String, dynamic>{
+        'id_nik': row['id_nik'],
+        'nama_karyawan': nama,
+        'id_unit': unit.isEmpty ? null : unit,
+        'id_role': role.isEmpty ? null : role,
+        if (isCreate || pass.isNotEmpty) 'password': pass,
+      };
+      if (isCreate) {
+        await dio.post(_usersEndpoint, data: data);
+      } else {
+        await dio.put('$_usersEndpoint/${row['id_nik']}', data: data);
       }
       _applyLocally(originalNik: originalNik, row: row);
+      await MasterDataStore.ensure().fetchFromBackend();
       return null;
     } on DioException catch (error) {
       return _errorMessage(error, 'Gagal menyimpan data karyawan.');
@@ -209,14 +204,14 @@ class MasterKaryawanController extends GetxController {
 
     isSaving.value = true;
     try {
-      if (_usersFromServer) {
-        final dio = await ApiService.getClient();
-        await dio.delete('$_usersEndpoint/$nik');
-      }
+      // [MODIFIKASI] Hapus karyawan langsung dari database backend
+      final dio = await ApiService.getClient();
+      await dio.delete('$_usersEndpoint/$nik');
       listKaryawan.removeWhere(
         (karyawan) => karyawan['id_nik']?.toString() == nik,
       );
       listKaryawan.refresh();
+      await MasterDataStore.ensure().fetchFromBackend();
       return null;
     } on DioException catch (error) {
       return _errorMessage(error, 'Gagal menghapus karyawan.');
@@ -259,46 +254,22 @@ class MasterKaryawanController extends GetxController {
     _sort();
   }
 
-  /// Lengkapi nama unit/role dan pastikan pilihan dropdown memuat semua
-  /// relasi yang sedang dipakai karyawan.
+  /// [MODIFIKASI] Lengkapi nama unit dan role pada baris karyawan tanpa memasukkan
+  /// unit/role yang sudah non-aktif ke dalam listUnit/listRole.
+  /// listUnit dan listRole murni hanya memuat master data aktif dari server agar form Tambah Karyawan
+  /// hanya menampilkan unit yang aktif (misal hanya IT-Dev, bukan U-IT).
   void _hydrateRelations() {
-    final unitIds = listUnit
-        .map((unit) => unit['id_unit']?.toString() ?? '')
-        .toSet();
-    final roleIds = listRole
-        .map((role) => role['id_role']?.toString() ?? '')
-        .toSet();
-
-    // Pada mode contoh, unit dan role berasal dari store bersama. Relasi yang
-    // tidak ditemukan berarti memang sudah dihapus, jadi jangan dihidupkan
-    // kembali. Pelengkapan hanya diperlukan saat karyawan datang dari server.
-    if (_usersFromServer) {
-      for (final karyawan in listKaryawan) {
-        final unitId = karyawan['id_unit']?.toString().trim() ?? '';
-        if (unitId.isNotEmpty && !unitIds.contains(unitId)) {
-          listUnit.add({
-            'id_unit': unitId,
-            'nama_unit': _displayOrId(karyawan['nama_unit'], unitId),
-          });
-          unitIds.add(unitId);
-        }
-
-        final roleId = karyawan['id_role']?.toString().trim() ?? '';
-        if (roleId.isNotEmpty && !roleIds.contains(roleId)) {
-          listRole.add({
-            'id_role': roleId,
-            'nama_role': _displayOrId(karyawan['nama_role'], roleId),
-          });
-          roleIds.add(roleId);
-        }
-      }
-    }
-
     for (final karyawan in listKaryawan) {
-      final unitId = karyawan['id_unit']?.toString() ?? '';
-      final roleId = karyawan['id_role']?.toString() ?? '';
-      karyawan['nama_unit'] = unitName(unitId);
-      karyawan['nama_role'] = roleName(roleId);
+      final unitId = karyawan['id_unit']?.toString().trim() ?? '';
+      final roleId = karyawan['id_role']?.toString().trim() ?? '';
+      final currentUnit = karyawan['nama_unit']?.toString().trim() ?? '';
+      if (currentUnit.isEmpty || currentUnit == unitId) {
+        karyawan['nama_unit'] = unitName(unitId);
+      }
+      final currentRole = karyawan['nama_role']?.toString().trim() ?? '';
+      if (currentRole.isEmpty || currentRole == roleId) {
+        karyawan['nama_role'] = roleName(roleId);
+      }
     }
 
     listUnit.sort(
@@ -323,11 +294,6 @@ class MasterKaryawanController extends GetxController {
       return firstName.compareTo(secondName);
     });
     listKaryawan.refresh();
-  }
-
-  String _displayOrId(dynamic value, String fallback) {
-    final text = value?.toString().trim() ?? '';
-    return text.isEmpty ? fallback : text;
   }
 
   Map<String, dynamic> _normalizeKaryawan(Map<String, dynamic> row) {
@@ -357,9 +323,33 @@ class MasterKaryawanController extends GetxController {
   }
 
   Map<String, dynamic> _normalizeRole(Map<String, dynamic> row) {
+    final id = (row['id_role'] ?? row['idRole'] ?? '').toString();
+    // [MODIFIKASI] Ambil permissions dari row backend atau pertahankan permissions yang sudah ada di store
+    // agar data hak akses role tidak terhapus saat halaman Master Karyawan dimuat.
+    final permsRaw =
+        row['permissions'] ??
+        row['permission'] ??
+        row['hak_akses'] ??
+        row['hakAkses'];
+    List<String> permissions = [];
+    if (permsRaw != null) {
+      permissions = MasterDataStore.parsePermissions(permsRaw);
+    } else {
+      final existingRole = _store.listRole.firstWhereOrNull(
+        (r) => r['id_role']?.toString() == id,
+      );
+      if (existingRole != null && existingRole['permissions'] is List) {
+        permissions = List<String>.from(existingRole['permissions'] as List);
+      }
+    }
+
     return {
-      'id_role': (row['id_role'] ?? row['idRole'] ?? '').toString(),
+      'id_role': id,
       'nama_role': (row['nama_role'] ?? row['namaRole'] ?? '').toString(),
+      'permissions': permissions,
+      'created_at': row['created_at'] ?? row['createdAt'],
+      'updated_at': row['updated_at'] ?? row['updatedAt'],
+      'deleted_at': row['deleted_at'] ?? row['deletedAt'],
     };
   }
 

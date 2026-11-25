@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../controllers/laporan_controller.dart';
 import '../../auth/controllers/dashboard_controller.dart';
+import '../../../data/services/master_data_store.dart';
 import '../../../core/theme/app_buttons.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../global_widgets/bukti_preview.dart';
@@ -13,6 +14,8 @@ import '../../../global_widgets/filter_menu_button.dart';
 import '../../../global_widgets/image_upload_field.dart';
 import '../../../global_widgets/main_layout_widget.dart';
 import '../../../global_widgets/report_style_card.dart';
+import '../../../routes/app_pages.dart';
+import '../../tindakan/controllers/tindakan_controller.dart';
 
 class LaporanView extends GetView<LaporanController> {
   const LaporanView({super.key});
@@ -48,6 +51,7 @@ class _LaporanContentState extends State<_LaporanContent> {
   String? _selectedPrioritas;
   final List<String> _selectedPics = [];
   Uint8List? _buktiBytes;
+  String? _buktiUrl;
   Map<String, dynamic>? _editingReport;
   Map<String, dynamic>? _viewingReport;
 
@@ -55,12 +59,61 @@ class _LaporanContentState extends State<_LaporanContent> {
   final Set<String> _reportFilters = {};
 
   LaporanController get controller => widget.controller;
+  Worker? _viewingWorker;
+  Worker? _resetWorker;
 
   @override
   void initState() {
     super.initState();
     _resetForm(notify: false);
     _loadActiveUser();
+
+    // [MODIFIKASI] Dengarkan pemicu resetViewTrigger untuk mereset tampilan ke kondisi awal
+    _resetWorker = ever(widget.controller.resetViewTrigger, (_) {
+      if (mounted) {
+        setState(() {
+          _viewingReport = null;
+          _editingReport = null;
+          _reportFilters.clear();
+          _resetForm(notify: false);
+        });
+      }
+    });
+
+    // [MODIFIKASI] Dengarkan perubahan target viewingReportId saat notifikasi diklik agar detail laporan langsung terbuka
+    _viewingWorker = ever(widget.controller.viewingReportId, (id) {
+      if (id != null && id.isNotEmpty) {
+        final match = widget.controller.listLaporan.firstWhereOrNull(
+          (m) => m['id_laporan']?.toString() == id,
+        );
+        if (match != null && mounted) {
+          setState(() {
+            _viewingReport = match;
+          });
+          widget.controller.viewingReportId.value = null;
+        }
+      }
+    });
+
+    // [MODIFIKASI] Mengambil data laporan, prioritas, dan master data terbaru dari backend saat halaman dibuka
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await controller.fetchLaporanData();
+      controller.fetchPrioritas();
+      controller.master.fetchFromBackend();
+
+      final targetId = widget.controller.viewingReportId.value;
+      if (targetId != null && targetId.isNotEmpty) {
+        final match = widget.controller.listLaporan.firstWhereOrNull(
+          (m) => m['id_laporan']?.toString() == targetId,
+        );
+        if (match != null && mounted) {
+          setState(() {
+            _viewingReport = match;
+          });
+          widget.controller.viewingReportId.value = null;
+        }
+      }
+    });
   }
 
   Future<void> _loadActiveUser() async {
@@ -92,17 +145,11 @@ class _LaporanContentState extends State<_LaporanContent> {
 
   @override
   void dispose() {
+    _viewingWorker?.dispose();
+    _resetWorker?.dispose();
     _perihalController.dispose();
     _buktiController.dispose();
     super.dispose();
-  }
-
-  List<String> _availableValues(String key) {
-    return controller.listLaporan
-        .map((report) => report[key]?.toString() ?? '')
-        .where((value) => value.isNotEmpty)
-        .toSet()
-        .toList();
   }
 
   void _resetForm({bool notify = true}) {
@@ -116,6 +163,7 @@ class _LaporanContentState extends State<_LaporanContent> {
       _perihalController.clear();
       _buktiController.clear();
       _buktiBytes = null;
+      _buktiUrl = null;
     }
 
     if (notify) {
@@ -126,6 +174,11 @@ class _LaporanContentState extends State<_LaporanContent> {
   }
 
   void _loadForEdit(Map<String, dynamic> report) {
+    // [MODIFIKASI] Validasi: PIC yang ditugaskan pada laporan ini TIDAK BISA mengedit laporan dalam keadaan apapun di semua menu
+    if (_isPic(report)) {
+      _showMessage('PIC yang ditugaskan tidak dapat mengedit laporan.');
+      return;
+    }
     // Laporan yang sudah Done bersifat final dan tidak boleh diubah lagi.
     if (_displayStatus(report['status']?.toString()) == 'Done') {
       _showMessage('Laporan yang sudah Done tidak dapat diubah lagi.');
@@ -154,6 +207,7 @@ class _LaporanContentState extends State<_LaporanContent> {
       _buktiController.text = report['bukti']?.toString() ?? '';
       final savedBytes = report['bukti_bytes'];
       _buktiBytes = savedBytes is Uint8List ? savedBytes : null;
+      _buktiUrl = report['bukti_url']?.toString();
     });
   }
 
@@ -163,6 +217,33 @@ class _LaporanContentState extends State<_LaporanContent> {
       initialDate: isDeadline ? _deadline : _tanggalKejadian,
       firstDate: DateTime(2010),
       lastDate: DateTime(2035),
+      helpText: isDeadline ? 'Pilih batas waktu' : 'Pilih tanggal kejadian',
+      confirmText: 'Pilih',
+      cancelText: 'Batal',
+      // [MODIFIKASI] Styling elegan menggunakan Theme bawaan DatePicker Flutter tanpa Container ganda.
+      // Menghindari kontainer putih kosong yang membesar/tidak proporsional saat beralih ke mode input teks (ikon pensil).
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+              primary: AppColors.primary,
+              onPrimary: AppColors.white,
+              surface: AppColors.white,
+              onSurface: AppColors.textStrong,
+            ),
+            datePickerTheme: DatePickerThemeData(
+              backgroundColor: AppColors.white,
+              surfaceTintColor: Colors.transparent,
+              headerBackgroundColor: AppColors.primary,
+              headerForegroundColor: AppColors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
     if (selectedDate == null || !mounted) return;
 
@@ -176,6 +257,15 @@ class _LaporanContentState extends State<_LaporanContent> {
     });
   }
 
+  // [MODIFIKASI] Format tanggal ke ISO YYYY-MM-DD agar valid di PostgreSQL backend
+  String _formatIsoDate(DateTime date) {
+    final year = date.year.toString().padLeft(4, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    return '$year-$month-$day';
+  }
+
+  // [MODIFIKASI] Auto-resolve ID prioritas berdasarkan sisa hari menuju deadline
   String _priorityForDeadline(DateTime deadline) {
     final reportDate =
         _parseDate(_editingReport?['tgl_laporan']?.toString()) ??
@@ -183,12 +273,14 @@ class _LaporanContentState extends State<_LaporanContent> {
     final remainingDays = DateUtils.dateOnly(deadline)
         .difference(DateUtils.dateOnly(reportDate))
         .inDays;
-    if (remainingDays <= 1) return 'Tinggi';
-    if (remainingDays <= 3) return 'Sedang';
-    return 'Rendah';
+    if (remainingDays <= 0) return 'P-01'; // Kritis
+    if (remainingDays <= 1) return 'P-02'; // Tinggi
+    if (remainingDays <= 3) return 'P-03'; // Sedang
+    return 'P-04'; // Rendah
   }
 
-  void _submitReport() {
+  // [MODIFIKASI] POST laporan baru atau update PIC laporan ke backend
+  Future<void> _submitReport() async {
     final editing = _editingReport;
     if (editing != null &&
         _displayStatus(editing['status']?.toString()) == 'Done') {
@@ -210,10 +302,14 @@ class _LaporanContentState extends State<_LaporanContent> {
       );
       return;
     }
-    if (_selectedPics.isEmpty) {
-      _showMessage('Pilih minimal satu orang PIC.');
+
+    // [MODIFIKASI] Filter agar pelapor tidak terpilih sebagai PIC (aturan validasi backend)
+    final filteredPics = _selectedPics.where((nik) => nik != _activeNik).toList();
+    if (filteredPics.isEmpty) {
+      _showMessage('Pilih minimal satu orang PIC lain (bukan pelapor).');
       return;
     }
+
     if (_selectedPrioritas == null) {
       _showMessage('Pilih prioritas laporan terlebih dahulu.');
       return;
@@ -223,65 +319,114 @@ class _LaporanContentState extends State<_LaporanContent> {
       return;
     }
 
-    final isEditing = _editingReport != null;
-    final report = <String, dynamic>{
-      ...?_editingReport,
-      'id_laporan':
-          _editingReport?['id_laporan'] ??
-          'LAP-${DateTime.now().millisecondsSinceEpoch}',
-      'tgl_laporan':
-          _editingReport?['tgl_laporan'] ?? _formatDate(DateTime.now()),
-      'tgl_kejadian': _formatDate(_tanggalKejadian),
-      'id_nik_pelapor': _activeNik,
-      'nama_pelapor': _pelaporName(_activeName, _activeNik),
-      'id_unit_pelapor': _activeUnit,
-      'nama_unit_pelapor': controller.unitName(_activeUnit),
-      'id_kategori': _selectedKategori,
-      'id_nik_pic': _selectedPics.join(', '),
-      'perihal': title,
-      'prioritas': _selectedPrioritas,
-      'deadline': _formatDate(_deadline),
-      'bukti': _buktiController.text.trim(),
-      'bukti_bytes': _buktiBytes,
-      'status': _displayStatus(_editingReport?['status']?.toString()),
-      'tgl_selesai': _editingReport?['tgl_selesai'],
-    };
+    // [MODIFIKASI] Validasi bukti laporan pelapor wajib diunggah untuk laporan baru
+    if (editing == null && (_buktiBytes == null || _buktiBytes!.isEmpty)) {
+      _showMessage('Bukti laporan (gambar/dokumen) wajib diunggah.');
+      return;
+    }
 
-    if (_editingReport == null) {
-      report['id_tindak_lanjut'] = null;
-      report['id_nik_pic'] = _selectedPics.join(', ');
-      controller.listLaporan.insert(0, report);
-    } else {
-      final index = controller.listLaporan.indexOf(_editingReport!);
-      if (index >= 0) {
-        controller.listLaporan[index] = report;
+    // [MODIFIKASI] Validasi batasan ukuran file bukti (maksimal 5 MB)
+    if (_buktiBytes != null &&
+        _buktiBytes!.lengthInBytes > ImageUploadField.maxFileSizeBytes) {
+      _showMessage(
+        'Ukuran file bukti (${buktiFileSize(_buktiBytes)}) melebihi batas maksimal ${ImageUploadField.maxFileSizeText}. Silakan sesuaikan atau kompres file Anda.',
+      );
+      return;
+    }
+
+    // [MODIFIKASI] Jika sedang mode edit laporan, panggil update detail laporan ke backend (khusus pelapor/admin)
+    if (editing != null) {
+      if (_isPic(editing)) {
+        _showMessage('PIC yang ditugaskan tidak dapat mengedit laporan.');
+        return;
+      }
+      final id = editing['id_laporan']?.toString();
+      if (id != null) {
+        final success = await controller.updateReport(
+          idLaporan: id,
+          perihal: title,
+          tglKejadian: _formatIsoDate(_tanggalKejadian),
+          idKategori: _selectedKategori!,
+          deadline: _formatIsoDate(_deadline),
+          idPrioritas: _selectedPrioritas!,
+          idNikPics: filteredPics,
+          keterangan: editing['keterangan']?.toString(),
+          buktiBytes: _buktiBytes,
+          buktiFilename: _buktiController.text.trim().isNotEmpty
+              ? _buktiController.text.trim()
+              : null,
+        );
+        if (success) {
+          _resetForm();
+          _showMessage('Laporan berhasil diperbarui.', isSuccess: true);
+        }
+        return;
       }
     }
 
-    controller.listLaporan.refresh();
-    _resetForm();
-    _showMessage(
-      isEditing ? 'Laporan berhasil diperbarui.' : 'Laporan berhasil dikirim.',
+    // [MODIFIKASI] Kirim request POST ke backend dengan tanggal ISO YYYY-MM-DD
+    final success = await controller.createReport(
+      tglKejadian: _formatIsoDate(_tanggalKejadian),
+      idKategori: _selectedKategori!,
+      deadline: _formatIsoDate(_deadline),
+      perihal: title,
+      keterangan: _perihalController.text.trim(),
+      idPrioritas: _selectedPrioritas,
+      idNikPics: filteredPics,
+      buktiBytes: _buktiBytes,
+      buktiFilename: _buktiController.text.trim().isNotEmpty
+          ? _buktiController.text.trim()
+          : null,
     );
+
+    if (success) {
+      _resetForm();
+      _showMessage('Laporan berhasil dikirim.', isSuccess: true);
+    }
   }
 
-  void _showMessage(String message) {
+  void _showMessage(String message, {bool isSuccess = false}) {
     Get.snackbar(
-      'Informasi',
+      isSuccess ? 'Sukses' : 'Informasi',
       message,
       snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: AppColors.primary,
+      backgroundColor: isSuccess ? AppColors.success : AppColors.primary,
       colorText: AppColors.white,
       margin: const EdgeInsets.all(16),
     );
   }
 
+  // [MODIFIKASI] Memeriksa apakah pengguna aktif memiliki hak akses Admin
+  bool _isAdmin() {
+    final store = MasterDataStore.ensure();
+    final role = store.employeeRole(_activeNik).toUpperCase();
+    if (role == 'R-01' || role.contains('ADMIN')) return true;
+    if (Get.isRegistered<DashboardController>()) {
+      final activeRole = Get.find<DashboardController>().activeRoleId.value.toUpperCase();
+      if (activeRole == 'R-01' || activeRole.contains('ADMIN')) return true;
+      if (Get.find<DashboardController>().can('laporan.hapus')) return true;
+    }
+    return false;
+  }
+
+  // [MODIFIKASI] Hak akses hapus: Admin dapat menghapus semua laporan, User pelapor hanya laporan miliknya.
+  // User yang bukan pelapor TIDAK BISA menghapus laporan.
+  bool _canDeleteReport(Map<String, dynamic> report) {
+    if (_isAdmin()) return true;
+    return _isPelapor(report);
+  }
+
   Future<void> _confirmDelete(Map<String, dynamic> report) async {
+    if (!_canDeleteReport(report)) {
+      _showMessage('Hanya Admin atau Pelapor yang dapat menghapus laporan ini.');
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Hapus laporan?'),
-        content: Text('Laporan ${report['id_laporan'] ?? ''} akan dihapus.'),
+        content: Text('Laporan ${(report['nomor_laporan'] ?? report['id_laporan'] ?? '')} akan dihapus.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -296,34 +441,105 @@ class _LaporanContentState extends State<_LaporanContent> {
       ),
     );
     if (confirmed == true) {
-      controller.listLaporan.remove(report);
-      controller.listLaporan.refresh();
-      if (mounted) setState(() => _viewingReport = null);
+      final idLaporan = report['id_laporan']?.toString() ?? '';
+      if (idLaporan.isNotEmpty) {
+        final success = await controller.deleteReport(idLaporan);
+        if (success) {
+          Get.snackbar(
+            'Berhasil',
+            'Laporan berhasil dihapus.',
+            backgroundColor: AppColors.success,
+            colorText: Colors.white,
+          );
+          if (mounted) setState(() => _viewingReport = null);
+        }
+      }
     }
   }
 
-  /// Ringkasan status validasi pelapor pada kartu dan detail laporan.
+  bool _isPelapor(Map<String, dynamic> report) {
+    final nikPelapor = (report['id_nik_pelapor'] ?? report['pelapor']?['id_nik'])
+        ?.toString()
+        .trim()
+        .toUpperCase() ?? '';
+    final currentNik = _activeNik.trim().toUpperCase();
+    return currentNik.isNotEmpty && currentNik == nikPelapor;
+  }
+
+  // [MODIFIKASI] Memeriksa apakah pengguna aktif ditugaskan sebagai PIC pada laporan ini
+  bool _isPic(Map<String, dynamic> report) {
+    final currentNik = _activeNik.trim().toUpperCase();
+    if (currentNik.isEmpty) return false;
+
+    // Cek dari string koma id_nik_pic
+    final picStr = report['id_nik_pic']?.toString().toUpperCase() ?? '';
+    final picList = picStr
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    if (picList.contains(currentNik)) return true;
+
+    // Cek dari list penugasan_pic
+    if (report['penugasan_pic'] is List) {
+      for (final p in report['penugasan_pic'] as List) {
+        if (p is Map) {
+          final nik = (p['id_nik_pic'] ?? p['pic']?['id_nik'])
+              ?.toString()
+              .trim()
+              .toUpperCase();
+          if (nik == currentNik) return true;
+        }
+      }
+    }
+
+    // Cek dari list pics
+    if (report['pics'] is List) {
+      for (final p in report['pics'] as List) {
+        if (p is Map) {
+          final nik = (p['id_nik'] ?? p['id_nik_pic'])
+              ?.toString()
+              .trim()
+              .toUpperCase();
+          if (nik == currentNik) return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  /// Ringkasan status validasi/approval pelapor pada kartu dan detail laporan.
   String _validationLabel(Map<String, dynamic> report) {
-    if (report['validasi_pelapor'] == true) {
-      final date = report['tgl_validasi']?.toString().trim() ?? '';
-      final by = report['nama_validasi_by']?.toString().trim() ?? '';
-      if (date.isNotEmpty && by.isNotEmpty) return '$date oleh $by';
-      if (date.isNotEmpty) return 'Tervalidasi $date';
-      return 'Tervalidasi';
+    final status = _displayStatus(report['status']?.toString());
+    if (status == 'Done') {
+      final by = report['approved_by']?.toString().trim() ?? '';
+      final approver = report['approver']?['nama_karyawan']?.toString().trim() ??
+          (by.isNotEmpty ? controller.userName(by) : '');
+      if (approver.isNotEmpty) return 'Disetujui oleh $approver';
+      return 'Tervalidasi / Disetujui';
+    } else if (status == 'Menunggu Approval') {
+      return 'Menunggu Approval Pelapor';
+    } else if (status == 'Dikembalikan') {
+      return 'Dikembalikan untuk Perbaikan';
     }
-    return 'Menunggu validasi pelapor';
+    return 'Belum Approval';
   }
 
-  /// Pelapor mengonfirmasi bahwa laporan beserta tindak lanjutnya benar-benar
-  /// sudah selesai (Done).
-  Future<void> _confirmValidate(Map<String, dynamic> report) async {
+  /// Pelapor menyetujui laporan yang berstatus PENDING_APPROVAL menjadi COMPLETED.
+  Future<void> _confirmApprove(Map<String, dynamic> report) async {
+    if (!_isPelapor(report)) {
+      _showMessage('Hanya pelapor yang dapat menyetujui laporan.');
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         title: const Text(
-          'Validasi laporan?',
+          'Setujui Laporan Selesai?',
           style: TextStyle(
             fontSize: 17,
             fontWeight: FontWeight.w700,
@@ -331,9 +547,9 @@ class _LaporanContentState extends State<_LaporanContent> {
           ),
         ),
         content: Text(
-          'Pastikan laporan ${report['id_laporan'] ?? ''} beserta seluruh '
-          'tindak lanjutnya benar-benar sudah selesai. Setelah divalidasi, '
-          'kartu laporan akan ditandai tervalidasi.',
+          'Pastikan laporan ${report['nomor_laporan'] ?? report['id_laporan'] ?? ''} beserta seluruh '
+          'tindak lanjutnya benar-benar sudah selesai. Setelah disetujui, '
+          'status laporan akan menjadi Selesai (Done).',
           style: const TextStyle(
             fontSize: 13,
             color: AppColors.textWeak,
@@ -346,13 +562,13 @@ class _LaporanContentState extends State<_LaporanContent> {
             style: TextButton.styleFrom(foregroundColor: AppColors.textWeak),
             child: const Text('Batal'),
           ),
-          TextButton(
+          ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.success,
-              backgroundColor: AppColors.success.withValues(alpha: 0.08),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.success,
+              foregroundColor: AppColors.white,
             ),
-            child: const Text('Valid'),
+            child: const Text('Setujui (Approve)'),
           ),
         ],
       ),
@@ -360,63 +576,194 @@ class _LaporanContentState extends State<_LaporanContent> {
     if (confirmed != true) return;
 
     final id = report['id_laporan']?.toString();
-    var target = report;
-    for (final item in controller.listLaporan) {
-      if (item['id_laporan']?.toString() == id) {
-        target = item;
-        break;
+    if (id == null) return;
+
+    final success = await controller.updateApprovalStatus(
+      idLaporan: id,
+      status: 'COMPLETED',
+    );
+
+    if (success) {
+      if (mounted) {
+        setState(() => _viewingReport = null);
+        _showMessage('Laporan berhasil disetujui dan dinyatakan selesai.', isSuccess: true);
       }
     }
-    target['validasi_pelapor'] = true;
-    target['tgl_validasi'] = _formatDate(DateTime.now());
-    target['validasi_by'] = _activeNik;
-    target['nama_validasi_by'] = _pelaporName(_activeName, _activeNik);
-    // Pastikan tanggal selesai terisi saat pelapor memvalidasi laporan Done.
-    final finishedAt = target['tgl_selesai']?.toString().trim() ?? '';
-    if (finishedAt.isEmpty || finishedAt == '-') {
-      target['tgl_selesai'] = _formatDate(DateTime.now());
-    }
-    controller.listLaporan.refresh();
+  }
 
-    if (!mounted) return;
-    setState(() {});
-    Get.snackbar(
-      'Berhasil',
-      'Laporan dan tindak lanjut dinyatakan selesai oleh pelapor.',
-      snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: AppColors.success,
-      colorText: AppColors.white,
-      margin: const EdgeInsets.all(16),
+  /// Pelapor menolak approval laporan yang berstatus PENDING_APPROVAL dan mengembalikannya ke PIC.
+  /// Wajib menyertakan catatan / komentar penolakan.
+  Future<void> _confirmReject(Map<String, dynamic> report) async {
+    if (!_isPelapor(report)) {
+      _showMessage('Hanya pelapor yang dapat menolak approval laporan.');
+      return;
+    }
+
+    final noteController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text(
+          'Tolak & Kembalikan Laporan',
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+            color: Colors.redAccent,
+          ),
+        ),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Laporan ${report['nomor_laporan'] ?? report['id_laporan'] ?? ''} akan dikembalikan ke PIC untuk perbaikan.',
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textWeak,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Catatan penolakan / perbaikan (wajib diisi):',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textStrong,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: noteController,
+                maxLines: 3,
+                validator: (val) {
+                  if (val == null || val.trim().isEmpty) {
+                    return 'Catatan penolakan wajib diisi';
+                  }
+                  return null;
+                },
+                decoration: InputDecoration(
+                  hintText: 'Tuliskan alasan penolakan dan bagian yang perlu diperbaiki...',
+                  hintStyle: const TextStyle(fontSize: 12, color: AppColors.textWeak),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  contentPadding: const EdgeInsets.all(12),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            style: TextButton.styleFrom(foregroundColor: AppColors.textWeak),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (formKey.currentState?.validate() == true) {
+                Navigator.of(context).pop(true);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: AppColors.white,
+            ),
+            child: const Text('Tolak & Kembalikan'),
+          ),
+        ],
+      ),
     );
+    if (confirmed != true) return;
+
+    final id = report['id_laporan']?.toString();
+    if (id == null) return;
+
+    final success = await controller.updateApprovalStatus(
+      idLaporan: id,
+      status: 'RETURNED',
+      approvalNote: noteController.text.trim(),
+    );
+
+    if (success) {
+      if (mounted) {
+        setState(() => _viewingReport = null);
+        _showMessage('Laporan berhasil dikembalikan kepada PIC dengan catatan.', isSuccess: true);
+      }
+    }
   }
 
   /// Membuka kembali laporan yang sudah Done agar bisa diperbaiki lagi.
-  ///
-  /// Hanya role dengan izin `laporan.buka_kembali` (misalnya superadmin) yang
-  /// dapat melakukan ini. Status dikembalikan ke On Progress dan validasi
-  /// pelapor direset supaya laporan serta tindak lanjutnya bisa diubah.
+  /// Approval dan buka kembali hanya dapat dilakukan oleh Pelapor.
+  /// Wajib menyertakan catatan / komentar alasan buka kembali.
   Future<void> _confirmReopen(Map<String, dynamic> report) async {
+    if (!_isPelapor(report)) {
+      _showMessage('Hanya pelapor yang dapat membuka kembali laporan ini.');
+      return;
+    }
+
+    final noteController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         title: const Text(
-          'Buka kembali laporan?',
+          'Buka Kembali Laporan?',
           style: TextStyle(
             fontSize: 17,
             fontWeight: FontWeight.w700,
             color: AppColors.textStrong,
           ),
         ),
-        content: Text(
-          'Laporan ${report['id_laporan'] ?? ''} akan dibuka kembali dengan '
-          'status On Progress. Validasi pelapor akan direset sehingga laporan '
-          'dan tindak lanjutnya dapat diperbaiki lagi.',
-          style: const TextStyle(
-            fontSize: 13,
-            color: AppColors.textWeak,
-            height: 1.5,
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Laporan ${report['nomor_laporan'] ?? report['id_laporan'] ?? ''} akan dibuka kembali dan dikembalikan ke PIC untuk tindak lanjut ulang.',
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textWeak,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Catatan / Alasan membuka kembali (wajib diisi):',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textStrong,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: noteController,
+                maxLines: 3,
+                validator: (val) {
+                  if (val == null || val.trim().isEmpty) {
+                    return 'Catatan atau alasan buka kembali wajib diisi';
+                  }
+                  return null;
+                },
+                decoration: InputDecoration(
+                  hintText: 'Tuliskan alasan mengapa laporan dibuka kembali...',
+                  hintStyle: const TextStyle(fontSize: 12, color: AppColors.textWeak),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  contentPadding: const EdgeInsets.all(12),
+                ),
+              ),
+            ],
           ),
         ),
         actions: [
@@ -425,13 +772,17 @@ class _LaporanContentState extends State<_LaporanContent> {
             style: TextButton.styleFrom(foregroundColor: AppColors.textWeak),
             child: const Text('Batal'),
           ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.warning,
-              backgroundColor: AppColors.warning.withValues(alpha: 0.08),
+          ElevatedButton(
+            onPressed: () {
+              if (formKey.currentState?.validate() == true) {
+                Navigator.of(context).pop(true);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.warning,
+              foregroundColor: AppColors.white,
             ),
-            child: const Text('Buka kembali'),
+            child: const Text('Buka Kembali'),
           ),
         ],
       ),
@@ -439,35 +790,36 @@ class _LaporanContentState extends State<_LaporanContent> {
     if (confirmed != true) return;
 
     final id = report['id_laporan']?.toString();
-    var target = report;
-    for (final item in controller.listLaporan) {
-      if (item['id_laporan']?.toString() == id) {
-        target = item;
-        break;
+    if (id == null) return;
+
+    final success = await controller.updateApprovalStatus(
+      idLaporan: id,
+      status: 'RETURNED',
+      approvalNote: noteController.text.trim(),
+    );
+
+    if (success) {
+      if (mounted) {
+        setState(() => _viewingReport = null);
+        _showMessage('Laporan berhasil dibuka kembali untuk perbaikan.', isSuccess: true);
       }
     }
-    target['status'] = 'On Progress';
-    target['validasi_pelapor'] = false;
-    target.remove('tgl_validasi');
-    target.remove('validasi_by');
-    target.remove('nama_validasi_by');
-    target.remove('tgl_selesai');
-    controller.listLaporan.refresh();
-
-    if (!mounted) return;
-    setState(() {});
-    Get.snackbar(
-      'Laporan dibuka kembali',
-      'Status laporan kembali ke On Progress dan validasi pelapor direset.',
-      snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: AppColors.warning,
-      colorText: AppColors.white,
-      margin: const EdgeInsets.all(16),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
+    // [MODIFIKASI] Tangani pembukaan detail laporan langsung saat notifikasi diklik
+    final targetId = widget.controller.viewingReportId.value;
+    if (targetId != null && targetId.isNotEmpty) {
+      for (final item in widget.controller.listLaporan) {
+        if (item['id_laporan']?.toString() == targetId) {
+          _viewingReport = item;
+          widget.controller.viewingReportId.value = null;
+          break;
+        }
+      }
+    }
+
     if (_viewingReport case final viewing?) {
       return Obx(() {
         // Baca langsung dari daftar reaktif supaya perubahan dari halaman
@@ -628,28 +980,39 @@ class _LaporanContentState extends State<_LaporanContent> {
     required double uploadWidth,
   }) {
     final kategoriOptions = controller.kategoriOptions;
+    // [MODIFIKASI] Ambil nama kategori yang valid dari backend (nama_kategori / jenis_kategori)
     final categoryLabels = <String, String>{
       for (final kategori in kategoriOptions)
         kategori['id_kategori']?.toString() ?? '':
-            kategori['jenis_kategori']?.toString() ?? '',
+            (kategori['nama_kategori']?.toString().trim().isNotEmpty == true)
+                ? kategori['nama_kategori']!.toString()
+                : (kategori['jenis_kategori']?.toString() ?? ''),
     };
-    final picOptions =
-        <String>{
-          ...controller.employeeNiks,
-          ..._availableValues('id_nik_pic')
-              .expand((value) => value.split(','))
-              .map((value) => value.trim())
-              .where((value) => value.isNotEmpty),
-        }.toList()..sort(
-          (first, second) =>
-              controller.userName(first).compareTo(controller.userName(second)),
-        );
-    final priorities = <String>{
-      ..._availableValues('prioritas'),
-      'Tinggi',
-      'Sedang',
-      'Rendah',
-    }.toList();
+
+    // [MODIFIKASI] PIC options HANYA mengambil karyawan yang aktif (tidak di-soft-delete).
+    // Tidak lagi menyertakan data historis dari laporan lama agar karyawan yang telah dihapus tidak muncul.
+    // Juga mengecualikan pelapor aktif dan PIC yang sudah dipilih ke dalam daftar chip.
+    final picOptions = controller.employeeNiks
+        .where((nik) =>
+            nik.isNotEmpty &&
+            nik != _activeNik &&
+            !_selectedPics.contains(nik))
+        .toSet()
+        .toList()
+      ..sort(
+        (first, second) =>
+            controller.userName(first).compareTo(controller.userName(second)),
+      );
+
+    // [MODIFIKASI] Prioritas diambil dari data master backend (P-01 s/d P-04)
+    final priorityLabels = <String, String>{
+      for (final p in controller.listPrioritas)
+        p['id_prioritas']?.toString() ?? '':
+            p['nama_prioritas']?.toString() ?? p['id_prioritas']?.toString() ?? '',
+    };
+    final priorities = priorityLabels.isNotEmpty
+        ? priorityLabels.keys.toList()
+        : <String>['P-01', 'P-02', 'P-03', 'P-04'];
 
     return Container(
       width: double.infinity,
@@ -666,8 +1029,9 @@ class _LaporanContentState extends State<_LaporanContent> {
                 width: fieldWidth,
                 child: _readOnlyField(
                   'Tanggal laporan',
-                  _editingReport?['tgl_laporan']?.toString() ??
-                      _formatDate(DateTime.now()),
+                  _editingReport != null
+                      ? _formatDisplayDate(_editingReport!['tgl_laporan'])
+                      : _formatDate(DateTime.now()),
                   Icons.lock_outline,
                 ),
               ),
@@ -715,18 +1079,23 @@ class _LaporanContentState extends State<_LaporanContent> {
                   hint: 'Pilih prioritas',
                   value: _selectedPrioritas,
                   values: priorities,
+                  labels: priorityLabels.isNotEmpty ? priorityLabels : null,
                   onChanged: (value) =>
                       setState(() => _selectedPrioritas = value),
                 ),
               ),
               SizedBox(
                 width: uploadWidth,
+                // [MODIFIKASI] Label bukti laporan diubah menjadi wajib diisi dan mendukung pratinjau bukti dokumen tersimpan
                 child: ImageUploadField(
+                  label: 'Upload bukti laporan (Wajib)',
                   fileName: _buktiController.text,
                   bytes: _buktiBytes,
+                  imageUrl: _buktiUrl,
                   onChanged: (name, bytes) => setState(() {
                     _buktiController.text = name;
                     _buktiBytes = bytes;
+                    if (bytes != null) _buktiUrl = null;
                   }),
                 ),
               ),
@@ -833,26 +1202,24 @@ class _LaporanContentState extends State<_LaporanContent> {
       'Rendah' => AppColors.success,
       _ => AppColors.textWeak,
     };
-    final reportDate =
-        report['tgl_laporan']?.toString() ??
-        report['tanggal_laporan']?.toString() ??
-        '-';
+    // [MODIFIKASI] Format tampilan tanggal laporan menjadi DD-MM-YYYY
+    final rawReportDate =
+        report['tgl_laporan'] ??
+        report['tanggal_laporan'] ??
+        report['created_at'];
+    final reportDate = _formatDisplayDate(rawReportDate);
     final pic = _picDisplay(report);
-    final lastUpdatedBy =
-        report['last_update_by']?.toString() ??
-        report['lastUpdateBy']?.toString() ??
-        report['update_by']?.toString() ??
-        report['updateBy']?.toString() ??
-        '-';
+    // [MODIFIKASI] Format lastUpdatedBy agar menampilkan nama karyawan dan unit kerja, bukan NIK mentah
+    final lastUpdatedBy = _lastUpdateByDisplay(report);
     final kategori = controller.kategoriName(
       report['id_kategori']?.toString() ?? '',
     );
-    final deadline = report['deadline']?.toString().trim();
-    final isDone = status == 'Done';
-    final isValidated = report['validasi_pelapor'] == true;
+    // [MODIFIKASI] Format deadline menjadi DD-MM-YYYY
+    final deadline = _formatDisplayDate(report['deadline']);
 
     return ReportStyleCard(
-      reportId: report['id_laporan']?.toString() ?? '-',
+      // [MODIFIKASI] Tampilkan nomor_laporan ringkas (lap01-tanggalbuat), fallback ke id_laporan
+      reportId: (report['nomor_laporan'] ?? report['id_laporan'])?.toString() ?? '-',
       title: report['perihal']?.toString() ?? '-',
       status: status,
       onTap: () => setState(() => _viewingReport = report),
@@ -865,11 +1232,26 @@ class _LaporanContentState extends State<_LaporanContent> {
             label: priority,
             color: priorityColor,
           ),
-        if (isDone && isValidated)
+        if (status == 'Done')
           const ReportMetaChip(
             icon: Icons.verified_outlined,
-            label: 'Laporan & tindakan tervalidasi',
+            label: 'Laporan Selesai & Disetujui',
             color: AppColors.success,
+          ),
+        if (status == 'Menunggu Approval')
+          const ReportMetaChip(
+            icon: Icons.rate_review_outlined,
+            label: 'Menunggu Approval Pelapor',
+            color: Colors.purple,
+          ),
+        if (status == 'Dikembalikan')
+          ReportMetaChip(
+            icon: Icons.assignment_return_outlined,
+            label: report['approval_note'] != null &&
+                    report['approval_note'].toString().trim().isNotEmpty
+                ? 'Dikembalikan: ${report['approval_note']}'
+                : 'Dikembalikan untuk Perbaikan',
+            color: Colors.redAccent,
           ),
       ],
       infoItems: [
@@ -881,17 +1263,17 @@ class _LaporanContentState extends State<_LaporanContent> {
         ReportInfoItem(
           icon: Icons.event_outlined,
           label: 'Deadline',
-          value: deadline == null || deadline.isEmpty ? '-' : deadline,
+          value: deadline.isEmpty ? '-' : deadline,
         ),
         ReportInfoItem(
           icon: Icons.history_outlined,
           label: 'Last update by',
           value: lastUpdatedBy,
         ),
-        if (isDone)
+        if (status == 'Done' || status == 'Menunggu Approval' || status == 'Dikembalikan')
           ReportInfoItem(
             icon: Icons.how_to_reg_outlined,
-            label: 'Validasi pelapor',
+            label: 'Status Approval',
             value: _validationLabel(report),
           ),
       ],
@@ -908,9 +1290,27 @@ class _LaporanContentState extends State<_LaporanContent> {
         ),
       ],
       actions: [
-        if (isDone && !isValidated && _can('laporan.validasi'))
-          _validateButton(report),
-        if (isDone && _canReopen())
+        if (status == 'Menunggu Approval' && _isPelapor(report)) ...[
+          _cardActionButton(
+            tooltip: 'Setujui Laporan (Selesai)',
+            onPressed: () => _confirmApprove(report),
+            icon: const Icon(
+              Icons.check_circle_outline,
+              size: 18,
+              color: AppColors.success,
+            ),
+          ),
+          _cardActionButton(
+            tooltip: 'Tolak & Kembalikan',
+            onPressed: () => _confirmReject(report),
+            icon: const Icon(
+              Icons.cancel_outlined,
+              size: 18,
+              color: Colors.redAccent,
+            ),
+          ),
+        ],
+        if (status == 'Done' && _isPelapor(report))
           _cardActionButton(
             tooltip: 'Buka kembali laporan',
             onPressed: () => _confirmReopen(report),
@@ -920,7 +1320,8 @@ class _LaporanContentState extends State<_LaporanContent> {
               color: AppColors.warning,
             ),
           ),
-        if (_can('laporan.ubah') && !isDone)
+        // [MODIFIKASI] Tombol edit disembunyikan jika pengguna aktif adalah PIC pada laporan ini
+        if (_can('laporan.ubah') && !_isPic(report) && status != 'Done')
           _cardActionButton(
             tooltip: 'Edit laporan',
             onPressed: () => _loadForEdit(report),
@@ -930,7 +1331,8 @@ class _LaporanContentState extends State<_LaporanContent> {
               color: AppColors.primary,
             ),
           ),
-        if (_can('laporan.hapus'))
+        // [MODIFIKASI] Hak akses hapus: Admin dapat menghapus semua, Pelapor dapat menghapus miliknya sendiri
+        if (_canDeleteReport(report))
           PopupMenuButton<String>(
             tooltip: 'Aksi laporan',
             padding: EdgeInsets.zero,
@@ -968,29 +1370,6 @@ class _LaporanContentState extends State<_LaporanContent> {
         visualDensity: VisualDensity.compact,
         splashRadius: 15,
         icon: icon,
-      ),
-    );
-  }
-
-  /// Tombol validasi pelapor agar laporan Done dari penindak bisa langsung
-  /// divalidasi dengan satu klik dari kartu laporan.
-  Widget _validateButton(Map<String, dynamic> report) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 4),
-      child: OutlinedButton.icon(
-        onPressed: () => _confirmValidate(report),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.success,
-          side: const BorderSide(color: AppColors.success),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          visualDensity: VisualDensity.compact,
-        ),
-        icon: const Icon(Icons.how_to_reg_outlined, size: 15),
-        label: const Text(
-          'Validasi',
-          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-        ),
       ),
     );
   }
@@ -1058,9 +1437,43 @@ class _LaporanContentState extends State<_LaporanContent> {
     return values.isEmpty ? '-' : values.join(' · ');
   }
 
+  // [MODIFIKASI] Format NIK / ID actor menjadi nama karyawan dan unit kerja
+  String _formatActorOrNik(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty || trimmed == '-') return '-';
+    final name = controller.userName(trimmed);
+    final unit = controller.employeeUnitName(trimmed);
+    final parts = [name, unit].where((v) => v.isNotEmpty && v != '-').toList();
+    return parts.isEmpty ? trimmed : parts.join(' · ');
+  }
+
+  // [MODIFIKASI] Menampilkan informasi Last Update By lengkap (Nama · Unit), fallback ke Pelapor
+  String _lastUpdateByDisplay(Map<String, dynamic> report) {
+    final raw = (report['last_update_by'] ?? report['lastUpdateBy'])?.toString().trim();
+    if (raw != null && raw.isNotEmpty && raw != '-') {
+      if (!raw.contains('·') && !raw.contains(' - ') && !raw.contains(' ')) {
+        return _formatActorOrNik(raw);
+      }
+      return raw;
+    }
+    return _pelaporDisplay(report);
+  }
+
+  void _navigateToTindakan(Map<String, dynamic> report) {
+    if (Get.isRegistered<TindakanController>()) {
+      final tindakanCtrl = Get.find<TindakanController>();
+      tindakanCtrl.selectReport(report);
+    }
+    Get.toNamed(Routes.TINDAKAN, arguments: report);
+  }
+
   Widget _buildDetail(Map<String, dynamic> report) {
     final details = <(String, String)>[
-      ('Tanggal kejadian', report['tgl_kejadian']?.toString() ?? '-'),
+      // [MODIFIKASI] Format tanggal kejadian dan deadline menjadi DD-MM-YYYY pada detail laporan
+      (
+        'Tanggal kejadian',
+        _formatDisplayDate(report['tgl_kejadian'] ?? report['tanggal_kejadian']),
+      ),
       ('Pelapor', _pelaporDisplay(report)),
       (
         'Kategori',
@@ -1068,25 +1481,46 @@ class _LaporanContentState extends State<_LaporanContent> {
       ),
       ('PIC', _picDisplay(report)),
       ('Prioritas', report['prioritas']?.toString() ?? '-'),
-      ('Deadline', report['deadline']?.toString() ?? '-'),
+      ('Deadline', _formatDisplayDate(report['deadline'])),
       ('Bukti laporan', report['bukti']?.toString() ?? '-'),
       (
         'Last update by',
-        (report['last_update_by'] ?? report['lastUpdateBy'])?.toString() ?? '-',
+        _lastUpdateByDisplay(report),
       ),
     ];
     final actionDetails = _actionDetails(report['detail_tindakan']);
-    final actionProgress = _actionProgress(report['progres_tindakan']);
+    // [MODIFIKASI] Membaca actionProgress langsung dari detail_tindakan agar sinkron dengan status database
+    final actionProgress = _actionProgress(report['detail_tindakan'] ?? report['progres_tindakan']);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          TextButton.icon(
-            onPressed: () => setState(() => _viewingReport = null),
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 16),
-            label: const Text('Detail Laporan'),
+          Row(
+            children: [
+              TextButton.icon(
+                onPressed: () => setState(() => _viewingReport = null),
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 16),
+                label: const Text('Kembali ke Daftar'),
+              ),
+              const Spacer(),
+              // [MODIFIKASI] Tombol "Berikan Tindakan" di samping tombol kembali jika pengguna aktif adalah PIC laporan ini
+              if (_isPic(report) && _displayStatus(report['status']?.toString()) != 'Done')
+                FilledButton.icon(
+                  onPressed: () => _navigateToTindakan(report),
+                  icon: const Icon(Icons.playlist_add_check_rounded, size: 18),
+                  label: const Text('Berikan Tindakan'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 12),
           Container(
@@ -1108,7 +1542,9 @@ class _LaporanContentState extends State<_LaporanContent> {
                         ),
                       ),
                     ),
+                    // [MODIFIKASI] Tombol edit disembunyikan di detail laporan jika pengguna aktif adalah PIC
                     if (_can('laporan.ubah') &&
+                        !_isPic(report) &&
                         _displayStatus(report['status']?.toString()) != 'Done')
                       IconButton(
                         tooltip: 'Edit laporan',
@@ -1129,13 +1565,24 @@ class _LaporanContentState extends State<_LaporanContent> {
                           color: AppColors.warning,
                         ),
                       ),
+                    // [MODIFIKASI] Tombol hapus di detail jika pengguna adalah Admin atau Pelapor laporan ini
+                    if (_canDeleteReport(report))
+                      IconButton(
+                        tooltip: 'Hapus laporan',
+                        onPressed: () => _confirmDelete(report),
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          color: AppColors.error,
+                        ),
+                      ),
                     _statusPill(_displayStatus(report['status']?.toString())),
                   ],
                 ),
                 const SizedBox(height: 4),
+                // [MODIFIKASI] Tampilkan nomor_laporan ringkas pada detail laporan (misal: lap01-tanggalbuat)
                 Text(
-                  report['id_laporan']?.toString() ?? '-',
-                  style: const TextStyle(color: AppColors.primary),
+                  (report['nomor_laporan'] ?? report['id_laporan'])?.toString() ?? '-',
+                  style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600),
                 ),
                 const Divider(height: 28),
                 Wrap(
@@ -1150,11 +1597,17 @@ class _LaporanContentState extends State<_LaporanContent> {
                       )
                       .toList(),
                 ),
-                if (report['bukti_bytes'] case final Uint8List bytes) ...[
+                // [MODIFIKASI] Tampilkan pratinjau bukti laporan pelapor (mendukung bytes lokal atau URL storage backend)
+                if ((report['bukti'] != null && report['bukti'].toString().trim().isNotEmpty && report['bukti'] != '-') ||
+                    report['bukti_bytes'] != null ||
+                    (report['bukti_url'] != null && report['bukti_url'].toString().trim().isNotEmpty)) ...[
                   const SizedBox(height: 16),
                   BuktiPreviewTile(
                     fileName: report['bukti']?.toString() ?? '',
-                    bytes: bytes,
+                    bytes: report['bukti_bytes'] is Uint8List ? report['bukti_bytes'] as Uint8List : null,
+                    imageUrl: report['bukti_url']?.toString(),
+                    idEvidence: report['id_evidence']?.toString(),
+                    idLaporan: report['id_laporan']?.toString(),
                   ),
                 ],
                 const Divider(height: 32),
@@ -1176,9 +1629,10 @@ class _LaporanContentState extends State<_LaporanContent> {
                   Column(
                     children: actionDetails.map((action) {
                       final detailId = action['id_detail']?.toString();
-                      final isDone = detailId == null
-                          ? false
-                          : actionProgress[detailId] ?? false;
+                      // [MODIFIKASI] Memeriksa status ceklis langsung dari field selesai/is_completed database
+                      final isDone = action['selesai'] == true ||
+                          action['is_completed'] == true ||
+                          (detailId != null && (actionProgress[detailId] ?? false));
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 10),
                         child: Row(
@@ -1229,23 +1683,45 @@ class _LaporanContentState extends State<_LaporanContent> {
                   'Bukti tindak lanjut',
                   report['bukti_tindakan']?.toString() ?? '-',
                 ),
-                if (report['bukti_tindakan_bytes']
-                    case final Uint8List bytes) ...[
+                // [MODIFIKASI] Tampilkan pratinjau bukti tindak lanjut (mendukung bytes lokal atau URL storage backend)
+                if ((report['bukti_tindakan'] != null && report['bukti_tindakan'].toString().trim().isNotEmpty && report['bukti_tindakan'] != '-') ||
+                    report['bukti_tindakan_bytes'] != null ||
+                    (report['bukti_tindakan_url'] != null && report['bukti_tindakan_url'].toString().trim().isNotEmpty)) ...[
                   const SizedBox(height: 8),
                   BuktiPreviewTile(
                     fileName: report['bukti_tindakan']?.toString() ?? '',
-                    bytes: bytes,
+                    bytes: report['bukti_tindakan_bytes'] is Uint8List ? report['bukti_tindakan_bytes'] as Uint8List : null,
+                    imageUrl: report['bukti_tindakan_url']?.toString(),
+                    idEvidence: report['id_evidence_tindakan']?.toString(),
+                    idLaporan: report['id_laporan']?.toString(),
                   ),
                 ],
                 _validationSection(report),
+                // [MODIFIKASI] Menampilkan timeline Riwayat Laporan (History) dengan nama PIC karyawan berdasarkan NIK
+                _buildHistorySection(report),
                 const SizedBox(height: 20),
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    TextButton(
+                    TextButton.icon(
                       onPressed: () => setState(() => _viewingReport = null),
-                      child: const Text('Kembali ke daftar'),
+                      icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 14),
+                      label: const Text('Kembali ke daftar'),
                     ),
+                    if (_isPic(report) && _displayStatus(report['status']?.toString()) != 'Done')
+                      FilledButton.icon(
+                        onPressed: () => _navigateToTindakan(report),
+                        icon: const Icon(Icons.playlist_add_check_rounded, size: 18),
+                        label: const Text('Berikan Tindakan'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ],
@@ -1256,104 +1732,462 @@ class _LaporanContentState extends State<_LaporanContent> {
     );
   }
 
-  /// Blok validasi pelapor pada detail laporan berstatus Done.
+  /// Blok status approval / catatan pada detail laporan.
   Widget _validationSection(Map<String, dynamic> report) {
-    if (_displayStatus(report['status']?.toString()) != 'Done') {
-      return const SizedBox.shrink();
-    }
-    final validated = report['validasi_pelapor'] == true;
-    final canValidate = !validated && _can('laporan.validasi');
+    final status = _displayStatus(report['status']?.toString());
+    final isPelapor = _isPelapor(report);
+    final hasNote = report['approval_note'] != null &&
+        report['approval_note'].toString().trim().isNotEmpty;
 
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(top: 16),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: validated
-            ? AppColors.success.withValues(alpha: 0.06)
-            : AppColors.surface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: validated
-              ? AppColors.success.withValues(alpha: 0.35)
-              : AppColors.divider,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                validated ? Icons.verified_outlined : Icons.how_to_reg_outlined,
-                size: 18,
-                color: validated ? AppColors.success : AppColors.textWeak,
-              ),
-              const SizedBox(width: 8),
-              const Expanded(
-                child: Text(
-                  'Validasi Pelapor',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textStrong,
+    final noteWidget = hasNote
+        ? Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(top: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.orange.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.info_outline, size: 18, color: Colors.orange),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        status == 'Dikembalikan'
+                            ? 'Catatan Pelapor (Laporan Dikembalikan / Perlu Perbaikan):'
+                            : 'Catatan Pelapor:',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textStrong,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        report['approval_note'].toString(),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textStrong,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+              ],
+            ),
+          )
+        : const SizedBox.shrink();
+
+    if (status == 'Menunggu Approval') {
+      return Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(top: 16),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.purple.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.purple.withValues(alpha: 0.3)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.rate_review_outlined, size: 20, color: Colors.purple),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Menunggu Approval Pelapor',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textStrong,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.purple.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Text(
+                    'Pending Approval',
+                    style: TextStyle(color: Colors.purple, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              isPelapor
+                  ? 'Seluruh checklist tindakan telah diselesaikan oleh PIC. Sebagai pelapor, Anda dapat menyetujui laporan atau menolak jika masih perlu perbaikan.'
+                  : 'Seluruh checklist tindakan telah diselesaikan oleh PIC. Menunggu review dan persetujuan dari pelapor (${_pelaporDisplay(report)}).',
+              style: const TextStyle(fontSize: 12, color: AppColors.textWeak, height: 1.4),
+            ),
+            noteWidget,
+            if (isPelapor) ...[
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () => _confirmApprove(report),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.success,
+                        foregroundColor: AppColors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      icon: const Icon(Icons.check_circle_outline, size: 18),
+                      label: const Text('Setujui (Approve)'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _confirmReject(report),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.redAccent,
+                        side: const BorderSide(color: Colors.redAccent),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      icon: const Icon(Icons.cancel_outlined, size: 18),
+                      label: const Text('Tolak & Kembalikan'),
+                    ),
+                  ),
+                ],
               ),
-              _validationPill(validated),
             ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            validated
-                ? 'Pelapor menyatakan laporan beserta tindak lanjutnya sudah '
-                      'selesai. ${_validationLabel(report)}'
-                : 'Penindak menandai laporan ini Done. Pelapor perlu '
-                      'memvalidasi bahwa laporan dan tindak lanjut memang sudah '
-                      'selesai.',
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.textWeak,
-              height: 1.5,
-            ),
-          ),
-          if (canValidate) ...[
-            const SizedBox(height: 12),
-            ElevatedButton.icon(
-              onPressed: () => _confirmValidate(report),
-              style: AppButtons.primary,
-              icon: const Icon(Icons.how_to_reg_outlined, size: 17),
-              label: const Text('Validasi sebagai Pelapor'),
-            ),
           ],
-          if (_canReopen()) ...[
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: () => _confirmReopen(report),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.warning,
-                side: const BorderSide(color: AppColors.warning),
+        ),
+      );
+    }
+
+    if (status == 'Done') {
+      return Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(top: 16),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.success.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.verified_outlined, size: 20, color: AppColors.success),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Laporan Telah Disetujui (Done)',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textStrong,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.success.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Text(
+                    'Selesai',
+                    style: TextStyle(color: AppColors.success, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Laporan dan seluruh tindakan telah dinyatakan selesai dan disetujui oleh pelapor (${_pelaporDisplay(report)}).',
+              style: const TextStyle(fontSize: 12, color: AppColors.textWeak, height: 1.4),
+            ),
+            noteWidget,
+            if (isPelapor) ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () => _confirmReopen(report),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.warning,
+                  side: const BorderSide(color: AppColors.warning),
+                ),
+                icon: const Icon(Icons.lock_open_outlined, size: 17),
+                label: const Text('Buka Kembali Laporan'),
               ),
-              icon: const Icon(Icons.lock_open_outlined, size: 17),
-              label: const Text('Buka kembali laporan'),
+            ],
+          ],
+        ),
+      );
+    }
+
+    if (status == 'Dikembalikan') {
+      return Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(top: 16),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.redAccent.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.redAccent.withValues(alpha: 0.3)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.assignment_return_outlined, size: 20, color: Colors.redAccent),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Laporan Dikembalikan untuk Perbaikan',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textStrong,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Text(
+                    'Perlu Perbaikan',
+                    style: TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Pelapor telah menolak approval atau membuka kembali laporan ini agar PIC melakukan perbaikan tindakan.',
+              style: TextStyle(fontSize: 12, color: AppColors.textWeak, height: 1.4),
+            ),
+            noteWidget,
+          ],
+        ),
+      );
+    }
+
+    return noteWidget;
+  }
+
+  // [MODIFIKASI] Bagian Riwayat Laporan (History): Diurutkan secara kronologis berdasarkan tanggal dan waktu update terbaru
+  Widget _buildHistorySection(Map<String, dynamic> report) {
+    final rawHistory = report['history'];
+    final historyList = (rawHistory is List)
+        ? List<Map<String, dynamic>>.from(rawHistory.whereType<Map>())
+        : <Map<String, dynamic>>[];
+
+    // [MODIFIKASI] Urutkan riwayat laporan berdasarkan waktu update sistem, user, maupun admin (DESC)
+    historyList.sort((a, b) {
+      final dtA = DateTime.tryParse(a['created_at']?.toString() ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0);
+      final dtB = DateTime.tryParse(b['created_at']?.toString() ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0);
+      return dtB.compareTo(dtA);
+    });
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Divider(height: 32),
+        const Row(
+          children: [
+            Icon(Icons.history_rounded, size: 20, color: AppColors.primary),
+            SizedBox(width: 8),
+            Text(
+              'Riwayat Laporan',
+              style: TextStyle(
+                color: AppColors.textStrong,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ],
-        ],
-      ),
+        ),
+        const SizedBox(height: 12),
+        if (historyList.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              'Belum ada aktivitas riwayat yang dicatat.',
+              style: TextStyle(color: AppColors.textWeak, fontSize: 13),
+            ),
+          )
+        else
+          Column(
+            children: historyList.map<Widget>((h) {
+              final dateStr = h['created_at']?.toString() ?? '';
+              final dt = DateTime.tryParse(dateStr);
+              // [MODIFIKASI] Jam riwayat laporan disesuaikan ke jam lokal Jakarta (WIB / UTC+7) dan format DD-MM-YYYY
+              String timeFormatted = dateStr;
+              if (dt != null) {
+                final wib = dt.toUtc().add(const Duration(hours: 7));
+                final day = wib.day.toString().padLeft(2, '0');
+                final month = wib.month.toString().padLeft(2, '0');
+                final year = wib.year;
+                final hour = wib.hour.toString().padLeft(2, '0');
+                final minute = wib.minute.toString().padLeft(2, '0');
+                final second = wib.second.toString().padLeft(2, '0');
+                timeFormatted = '$day-$month-$year $hour:$minute:$second WIB';
+              }
+
+              // [MODIFIKASI] Tampilkan nama actor dan nama unit kerja (Nama · Unit), bukan ID
+              final actorObj = h['actor'];
+              String actorName = '-';
+              String actorUnit = '';
+              if (actorObj is Map) {
+                actorName = actorObj['nama_karyawan']?.toString().trim() ?? actorObj['id_nik']?.toString().trim() ?? '-';
+                actorUnit = actorObj['nama_unit']?.toString().trim() ?? '';
+                if (actorUnit.isEmpty && actorObj['unit'] is Map) {
+                  actorUnit = actorObj['unit']['nama_unit']?.toString().trim() ?? '';
+                }
+                if (actorUnit.isEmpty && actorObj['id_unit'] != null) {
+                  actorUnit = controller.unitName(actorObj['id_unit'].toString());
+                }
+              } else if (h['actor_id'] != null) {
+                final aNik = h['actor_id'].toString().trim();
+                actorName = controller.userName(aNik);
+                actorUnit = controller.employeeUnitName(aNik);
+              } else {
+                actorName = 'Sistem';
+              }
+              final actor = (actorUnit.isNotEmpty && actorUnit != '-') ? '$actorName · $actorUnit' : actorName;
+
+              var desc = h['description']?.toString() ?? '-';
+
+              // [MODIFIKASI] Format PIC beserta nama unit kerja jika ada di new_value atau description
+              final newVal = h['new_value'];
+              if (newVal is Map) {
+                List<String> picLabels = [];
+                if (newVal['pics'] is List && (newVal['pics'] as List).isNotEmpty) {
+                  picLabels = (newVal['pics'] as List).map<String>((p) {
+                    if (p is Map) {
+                      final pName = p['nama_karyawan']?.toString().trim() ?? p['id_nik']?.toString().trim() ?? '';
+                      final pUnit = p['nama_unit']?.toString().trim() ?? '';
+                      return (pUnit.isNotEmpty && pUnit != '-') ? '$pName ($pUnit)' : pName;
+                    }
+                    return p.toString();
+                  }).where((s) => s.isNotEmpty).toList();
+                } else if (newVal['nama_pics'] is List && (newVal['nama_pics'] as List).isNotEmpty) {
+                  picLabels = (newVal['nama_pics'] as List).map((n) => n.toString()).toList();
+                } else if (newVal['id_nik_pics'] is List && (newVal['id_nik_pics'] as List).isNotEmpty) {
+                  picLabels = (newVal['id_nik_pics'] as List).map((nik) {
+                    final pName = controller.userName(nik.toString());
+                    final pUnit = controller.employeeUnitName(nik.toString());
+                    return (pUnit.isNotEmpty && pUnit != '-') ? '$pName ($pUnit)' : pName;
+                  }).toList();
+                }
+
+                if (picLabels.isNotEmpty) {
+                  final pJoined = picLabels.join(', ');
+                  if (desc.contains('Laporan baru dibuat') && !desc.contains('PIC:')) {
+                    desc = '$desc. PIC: $pJoined';
+                  } else if (desc.contains('Penugasan PIC diperbarui') && !desc.contains(':')) {
+                    desc = '$desc: $pJoined';
+                  }
+                }
+              }
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      margin: const EdgeInsets.only(top: 4),
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: AppColors.primary,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                actor,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: AppColors.textStrong,
+                                ),
+                              ),
+                              Text(
+                                timeFormatted,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.textWeak,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            desc,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textStrong,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+      ],
     );
   }
 
   List<Map<String, dynamic>> _actionDetails(dynamic value) {
     if (value is! List) return [];
-    return value.whereType<Map>().map(Map<String, dynamic>.from).toList();
+    return value.whereType<Map>().map((e) {
+      final m = Map<String, dynamic>.from(e);
+      m['id_detail'] = m['id_detail_tindakan'] ?? m['id_detail'];
+      m['deskripsi_tindakan'] = m['nama_tindakan'] ?? m['deskripsi_tindakan'];
+      m['selesai'] = m['is_completed'] == true || m['selesai'] == true;
+      return m;
+    }).toList();
   }
 
   Map<String, bool> _actionProgress(dynamic value) {
     if (value is! List) return {};
     return {
       for (final item in value.whereType<Map>())
-        if (item['id_detail'] != null)
-          item['id_detail'].toString(): item['selesai'] == true,
+        if (item['id_detail_tindakan'] != null || item['id_detail'] != null)
+          (item['id_detail_tindakan'] ?? item['id_detail']).toString():
+              item['is_completed'] == true || item['selesai'] == true,
     };
   }
 
@@ -1513,26 +2347,6 @@ class _LaporanContentState extends State<_LaporanContent> {
     );
   }
 
-  /// Pill khusus status validasi pelapor.
-  Widget _validationPill(bool validated) {
-    final color = validated ? AppColors.success : AppColors.warning;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        validated ? 'Tervalidasi' : 'Menunggu',
-        style: TextStyle(
-          color: color,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-
   Widget _emptyState() {
     return Container(
       width: double.infinity,
@@ -1554,18 +2368,19 @@ class _LaporanContentState extends State<_LaporanContent> {
   Color _statusColor(String status) {
     return switch (_displayStatus(status)) {
       'Done' => AppColors.success,
+      'Menunggu Approval' => Colors.purple,
+      'Dikembalikan' => Colors.redAccent,
       'On Progress' => AppColors.info,
       _ => AppColors.warning,
     };
   }
 
   String _displayStatus(String? status) {
-    return switch (status?.trim().toLowerCase()) {
-      'done' || 'selesai' => 'Done',
-      'on progress' ||
-      'on progres' ||
-      'proses' ||
-      'in progress' => 'On Progress',
+    return switch (status?.trim().toUpperCase()) {
+      'COMPLETED' || 'DONE' || 'SELESAI' => 'Done',
+      'PENDING_APPROVAL' || 'PENDING APPROVAL' => 'Menunggu Approval',
+      'RETURNED' || 'DIKEMBALIKAN' => 'Dikembalikan',
+      'IN_PROGRESS' || 'ON PROGRESS' || 'PROSES' => 'On Progress',
       _ => 'Open',
     };
   }
@@ -1573,7 +2388,40 @@ class _LaporanContentState extends State<_LaporanContent> {
   String _formatDate(DateTime date) {
     final day = date.day.toString().padLeft(2, '0');
     final month = date.month.toString().padLeft(2, '0');
-    return '$day/$month/${date.year}';
+    // [MODIFIKASI] Sesuaikan format tanggal laporan menjadi DD-MM-YYYY
+    return '$day-$month-${date.year}';
+  }
+
+  // [MODIFIKASI] Helper format tampilan tanggal laporan menjadi DD-MM-YYYY dari string ISO atau DateTime
+  String _formatDisplayDate(dynamic value) {
+    if (value == null) return '-';
+    final text = value.toString().trim();
+    if (text.isEmpty || text == '-') return '-';
+
+    final dt = DateTime.tryParse(text);
+    if (dt != null) {
+      final day = dt.day.toString().padLeft(2, '0');
+      final month = dt.month.toString().padLeft(2, '0');
+      return '$day-$month-${dt.year}';
+    }
+
+    final clean = text.replaceAll('/', '-');
+    final parts = clean.split('-');
+    if (parts.length == 3) {
+      if (parts[0].length == 4) {
+        final y = parts[0];
+        final m = parts[1].padLeft(2, '0');
+        final d = parts[2].padLeft(2, '0');
+        return '$d-$m-$y';
+      }
+      if (parts[2].length == 4) {
+        final d = parts[0].padLeft(2, '0');
+        final m = parts[1].padLeft(2, '0');
+        final y = parts[2];
+        return '$d-$m-$y';
+      }
+    }
+    return text;
   }
 
   DateTime? _parseDate(String? value) {
@@ -1581,8 +2429,16 @@ class _LaporanContentState extends State<_LaporanContent> {
     final isoDate = DateTime.tryParse(value);
     if (isoDate != null) return isoDate;
 
-    final parts = value.split('/');
+    final clean = value.replaceAll('/', '-');
+    final parts = clean.split('-');
     if (parts.length != 3) return null;
+    if (parts[0].length == 4) {
+      final year = int.tryParse(parts[0]);
+      final month = int.tryParse(parts[1]);
+      final day = int.tryParse(parts[2]);
+      if (day == null || month == null || year == null) return null;
+      return DateTime(year, month, day);
+    }
     final day = int.tryParse(parts[0]);
     final month = int.tryParse(parts[1]);
     final year = int.tryParse(parts[2]);

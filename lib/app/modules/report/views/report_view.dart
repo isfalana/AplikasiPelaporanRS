@@ -73,19 +73,65 @@ class _ReportContentState extends State<_ReportContent> {
   }
 
   Future<void> _chooseRange() async {
+    // [MODIFIKASI] Membungkus date range picker dengan dialog container terpusat berukuran pas (pop-up modal)
+    // agar tampil rapi sebagai pop-up dialog dan tidak membuka satu layar penuh pada desktop / web browser.
     final picked = await showDateRangePicker(
       context: context,
       firstDate: DateTime(2020),
       lastDate: DateTime(2035),
       initialDateRange: controller.dateRange.value,
       helpText: 'Pilih periode laporan',
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: Theme.of(context).colorScheme
-              .copyWith(primary: AppColors.primary),
-        ),
-        child: child!,
-      ),
+      confirmText: 'Pilih',
+      saveText: 'Pilih',
+      cancelText: 'Batal',
+      // [MODIFIKASI] Tampilkan sebagai Pop-up Dialog elegan di tengah layar (bukan layar penuh),
+      // dengan batas ukuran responsif menggunakan ConstrainedBox tanpa Container background ganda
+      // sehingga ukuran pop-up beradaptasi rapi baik pada mode kalender maupun mode input teks (ikon pensil).
+      builder: (context, child) {
+        final screenWidth = MediaQuery.of(context).size.width;
+        final screenHeight = MediaQuery.of(context).size.height;
+        final isMobile = screenWidth < 600;
+        final dialogWidth = isMobile ? (screenWidth - 32).clamp(320.0, 440.0) : 440.0;
+        final dialogHeight = isMobile ? (screenHeight - 64).clamp(420.0, 540.0) : 540.0;
+
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+              primary: AppColors.primary,
+              onPrimary: AppColors.white,
+              surface: AppColors.white,
+              onSurface: AppColors.textStrong,
+            ),
+            datePickerTheme: DatePickerThemeData(
+              backgroundColor: AppColors.white,
+              surfaceTintColor: Colors.transparent,
+              headerBackgroundColor: AppColors.primary,
+              headerForegroundColor: AppColors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              rangePickerBackgroundColor: AppColors.white,
+              rangePickerElevation: 12.0,
+              rangePickerShadowColor: Colors.black26,
+              rangePickerSurfaceTintColor: Colors.transparent,
+              rangePickerShape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              rangePickerHeaderBackgroundColor: AppColors.primary,
+              rangePickerHeaderForegroundColor: AppColors.white,
+            ),
+          ),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: dialogWidth,
+                maxHeight: dialogHeight,
+              ),
+              child: child!,
+            ),
+          ),
+        );
+      },
     );
     if (picked != null) controller.dateRange.value = picked;
   }
@@ -348,7 +394,8 @@ class _ReportContentState extends State<_ReportContent> {
         ),
       );
 
-      const columnWidths = <double>[14, 14, 18, 34, 26, 24, 36, 12, 20, 14];
+      // [MODIFIKASI] Lebar kolom PIC di Excel disesuaikan menjadi 26 agar nama karyawan dan unit tampil proporsional
+      const columnWidths = <double>[14, 14, 18, 34, 26, 26, 36, 12, 20, 14];
       for (var column = 0; column < columnWidths.length; column++) {
         sheet.setColumnWidth(column, columnWidths[column]);
       }
@@ -559,7 +606,14 @@ class _ReportContentState extends State<_ReportContent> {
         Obx(
           () => _dropdown(
             controller.selectedStatus.value,
-            const ['Semua', 'Open', 'On Progress', 'Done'],
+            const [
+              'Semua',
+              'Open',
+              'On Progress',
+              'Menunggu Approval',
+              'Dikembalikan',
+              'Done',
+            ],
             (value) {
               if (value != null) controller.selectedStatus.value = value;
             },
@@ -792,9 +846,10 @@ class _ReportContentState extends State<_ReportContent> {
                           ),
                         ),
                         DataCell(Text(controller.reporter(report))),
+                        // [MODIFIKASI] Lebar cell PIC disesuaikan menjadi 180 agar nama karyawan dan unit kerja muat dengan baik
                         DataCell(
                           SizedBox(
-                            width: 150,
+                            width: 180,
                             child: Text(
                               controller.pic(report),
                               maxLines: 2,
@@ -894,8 +949,12 @@ class _ReportContentState extends State<_ReportContent> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // [MODIFIKASI] Tampilkan nomor_laporan ringkas (misal: lap01-tanggalbuat), fallback ke id
                           Text(
-                            id,
+                            controller.value(report, 'nomor_laporan').isNotEmpty &&
+                                    controller.value(report, 'nomor_laporan') != '-'
+                                ? controller.value(report, 'nomor_laporan')
+                                : id,
                             style: const TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
@@ -1258,6 +1317,8 @@ class _ReportContentState extends State<_ReportContent> {
   Color _statusColor(String status) {
     return switch (status) {
       'Done' => AppColors.success,
+      'Menunggu Approval' => Colors.purple,
+      'Dikembalikan' => Colors.redAccent,
       'On Progress' => AppColors.info,
       _ => AppColors.warning,
     };

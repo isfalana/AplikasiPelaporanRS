@@ -29,8 +29,289 @@
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>aplikasilaporan</title>
+  <title>Lapor Permata - RS Permata Cirebon</title>
   <link rel="manifest" href="manifest.json">
+
+  <script>
+    // [MODIFIKASI] Registrasi Service Worker untuk notifikasi latar belakang
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('firebase-messaging-sw.js').then(function(reg) {
+          console.log('[SW] ServiceWorker registered with scope:', reg.scope);
+        }).catch(function(err) {
+          console.log('[SW] ServiceWorker registration failed:', err);
+        });
+      });
+    }
+
+    // Helper Web Notification Permission
+    window.requestWebNotificationPermission = async function() {
+      if (!('Notification' in window)) return 'unsupported';
+      if (Notification.permission === 'granted') return 'granted';
+      try {
+        const perm = await Notification.requestPermission();
+        if (perm === 'granted') return 'granted';
+        if (!window.isSecureContext) return 'insecure_context';
+        return perm;
+      } catch (e) {
+        if (!window.isSecureContext) return 'insecure_context';
+        return 'error';
+      }
+    };
+
+    // Helper Web Notification Display
+    window.showWebNotification = function(title, body, tag, url) {
+      if (!('Notification' in window)) return;
+      if (Notification.permission !== 'granted') return;
+
+      var options = {
+        body: body || '',
+        icon: 'favicon.png',
+        badge: 'favicon.png',
+        tag: tag || ('lapor-' + Date.now()),
+        requireInteraction: false,
+        data: { url: url || '/' }
+      };
+
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.ready.then(function(reg) {
+          reg.showNotification(title, options);
+        }).catch(function() {
+          try { new Notification(title, options); } catch(e) {}
+        });
+      } else {
+        try { new Notification(title, options); } catch(e) {}
+      }
+    };
+
+    // [MODIFIKASI] Audio Chime Notifikasi via Web Audio API (D5 -> A5 Medical/Hospital Chime)
+    window.playNotificationChime = function() {
+      try {
+        var AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        var ctx = new AudioCtx();
+        if (ctx.state === 'suspended') {
+          ctx.resume();
+        }
+        var now = ctx.currentTime;
+
+        // Nada 1: D5 (587.33 Hz)
+        var osc1 = ctx.createOscillator();
+        var gain1 = ctx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(587.33, now);
+        gain1.gain.setValueAtTime(0.28, now);
+        gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+        osc1.connect(gain1);
+        gain1.connect(ctx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.22);
+
+        // Nada 2: A5 (880.00 Hz)
+        var osc2 = ctx.createOscillator();
+        var gain2 = ctx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(880.00, now + 0.12);
+        gain2.gain.setValueAtTime(0.32, now + 0.12);
+        gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.start(now + 0.12);
+        osc2.stop(now + 0.55);
+      } catch (e) {
+        console.warn('[Audio] Gagal memutar nada notifikasi:', e);
+      }
+    };
+
+    // [MODIFIKASI] Helper kompresi gambar otomatis berbasis HTML5 Canvas untuk memperkecil ukuran file bukti
+    window.compressImageBytes = function(base64OrDataUrl, maxDimension, quality) {
+      return new Promise(function(resolve) {
+        try {
+          var img = new Image();
+          img.onload = function() {
+            var w = img.width;
+            var h = img.height;
+            var maxDim = maxDimension || 1600;
+            var q = (typeof quality === 'number') ? quality : 0.78;
+
+            if (w > maxDim || h > maxDim) {
+              if (w > h) {
+                h = Math.round((h * maxDim) / w);
+                w = maxDim;
+              } else {
+                w = Math.round((w * maxDim) / h);
+                h = maxDim;
+              }
+            }
+
+            var canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            var ctx = canvas.getContext('2d');
+            // Background putih untuk menjaga transparansi (misal tanda tangan / stempel PNG)
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, w, h);
+            ctx.drawImage(img, 0, 0, w, h);
+
+            var compressedDataUrl = canvas.toDataURL('image/jpeg', q);
+            resolve(compressedDataUrl);
+          };
+          img.onerror = function(err) {
+            console.warn('[Compress] Gagal membaca gambar:', err);
+            resolve(null);
+          };
+
+          var src = base64OrDataUrl;
+          if (!src.startsWith('data:')) {
+            src = 'data:image/jpeg;base64,' + base64OrDataUrl;
+          }
+          img.src = src;
+        } catch (e) {
+          console.error('[Compress] Error kompresi gambar:', e);
+          resolve(null);
+        }
+      });
+    };
+
+    // [MODIFIKASI] Live Camera Viewfinder Modal untuk Pengambilan Bukti Langsung dari Kamera Perangkat
+    window.openWebCameraCapture = function() {
+      return new Promise(function(resolve) {
+        // Fallback picker jika getUserMedia tidak didukung atau peramban tidak aman
+        function fallbackInput() {
+          var input = document.createElement('input');
+          input.type = 'file';
+          input.accept = 'image/*';
+          input.setAttribute('capture', 'environment');
+          input.style.display = 'none';
+          document.body.appendChild(input);
+          input.onchange = function(e) {
+            var file = e.target.files && e.target.files[0];
+            document.body.removeChild(input);
+            if (!file) { resolve(null); return; }
+            var reader = new FileReader();
+            reader.onload = function(evt) {
+              resolve({
+                name: file.name || ('kamera_' + Date.now() + '.jpg'),
+                dataUrl: evt.target.result
+              });
+            };
+            reader.onerror = function() { resolve(null); };
+            reader.readAsDataURL(file);
+          };
+          input.click();
+        }
+
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          fallbackInput();
+          return;
+        }
+
+        var currentStream = null;
+        var facingMode = 'environment'; // Kamera belakang default untuk foto bukti
+
+        var overlay = document.createElement('div');
+        overlay.id = 'permata-camera-modal';
+        overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background-color:rgba(15,23,42,0.96);z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:16px;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;user-select:none;';
+
+        // Header
+        var header = document.createElement('div');
+        header.style.cssText = 'width:100%;max-width:680px;display:flex;justify-content:space-between;align-items:center;color:#fff;padding:4px 8px;';
+        header.innerHTML = '<div style="font-weight:700;font-size:16px;display:flex;align-items:center;gap:10px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#10B981;box-shadow:0 0 10px #10B981;"></span>Kamera Perangkat</div><button id="permata-cam-close" style="background:rgba(255,255,255,0.18);border:none;color:#fff;width:38px;height:38px;border-radius:50%;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;transition:background 0.2s;">✕</button>';
+        overlay.appendChild(header);
+
+        // Viewfinder
+        var videoContainer = document.createElement('div');
+        videoContainer.style.cssText = 'flex:1;width:100%;max-width:680px;max-height:72vh;display:flex;justify-content:center;align-items:center;overflow:hidden;border-radius:20px;background:#000;margin:12px 0;position:relative;border:2px solid rgba(255,255,255,0.15);box-shadow:0 12px 30px rgba(0,0,0,0.5);';
+
+        var video = document.createElement('video');
+        video.autoplay = true;
+        video.playsInline = true;
+        video.muted = true;
+        video.style.cssText = 'width:100%;height:100%;object-fit:cover;';
+        videoContainer.appendChild(video);
+
+        // Frame guide
+        var guide = document.createElement('div');
+        guide.style.cssText = 'position:absolute;top:10%;left:8%;right:8%;bottom:10%;border:2px dashed rgba(255,255,255,0.45);border-radius:14px;pointer-events:none;';
+        videoContainer.appendChild(guide);
+
+        overlay.appendChild(videoContainer);
+
+        // Controls
+        var footer = document.createElement('div');
+        footer.style.cssText = 'width:100%;max-width:680px;display:flex;justify-content:space-around;align-items:center;padding:12px 0 16px;';
+        footer.innerHTML = '<button id="permata-cam-flip" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;padding:10px 18px;border-radius:24px;cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;">🔄 Balik Kamera</button><button id="permata-cam-capture" style="background:linear-gradient(135deg, #6366F1, #8B5CF6);border:4px solid #fff;box-shadow:0 0 20px rgba(99,102,241,0.7);color:#fff;width:72px;height:72px;border-radius:50%;cursor:pointer;font-size:26px;display:flex;align-items:center;justify-content:center;">📸</button><button id="permata-cam-cancel" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;padding:10px 18px;border-radius:24px;cursor:pointer;font-size:13px;font-weight:600;">Batal</button>';
+        overlay.appendChild(footer);
+
+        document.body.appendChild(overlay);
+
+        function cleanup() {
+          if (currentStream) {
+            currentStream.getTracks().forEach(function(t) { t.stop(); });
+            currentStream = null;
+          }
+          if (overlay.parentNode) {
+            overlay.parentNode.removeChild(overlay);
+          }
+        }
+
+        function startCamera(mode) {
+          if (currentStream) {
+            currentStream.getTracks().forEach(function(t) { t.stop(); });
+          }
+          navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: mode,
+              width: { ideal: 1920 },
+              height: { ideal: 1080 }
+            },
+            audio: false
+          }).then(function(stream) {
+            currentStream = stream;
+            video.srcObject = stream;
+          }).catch(function(err) {
+            console.warn('[Camera] getUserMedia tidak dapat dibuka, beralih ke pemilih kamera:', err);
+            cleanup();
+            fallbackInput();
+          });
+        }
+
+        startCamera(facingMode);
+
+        document.getElementById('permata-cam-close').onclick = function() {
+          cleanup();
+          resolve(null);
+        };
+        document.getElementById('permata-cam-cancel').onclick = function() {
+          cleanup();
+          resolve(null);
+        };
+        document.getElementById('permata-cam-flip').onclick = function() {
+          facingMode = (facingMode === 'environment') ? 'user' : 'environment';
+          startCamera(facingMode);
+        };
+        document.getElementById('permata-cam-capture').onclick = function() {
+          try {
+            var canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth || 1280;
+            canvas.height = video.videoHeight || 720;
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            var dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            cleanup();
+            resolve({
+              name: 'foto_kamera_' + Date.now() + '.jpg',
+              dataUrl: dataUrl
+            });
+          } catch (e) {
+            console.error('[Camera] Gagal mengambil foto:', e);
+            cleanup();
+            resolve(null);
+          }
+        };
+      });
+    };
+  </script>
 </head>
 <body>
   <!--

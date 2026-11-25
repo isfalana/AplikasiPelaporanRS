@@ -4,6 +4,8 @@ import 'package:get/get.dart';
 import '../../../core/theme/app_buttons.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../global_widgets/main_layout_widget.dart';
+// [MODIFIKASI] Import widget syarat dan kekuatan password
+import '../../../global_widgets/password_requirement_widget.dart';
 import '../controllers/master_karyawan_controller.dart';
 
 class MasterKaryawanView extends GetView<MasterKaryawanController> {
@@ -707,16 +709,10 @@ class _KaryawanFormDialogState extends State<_KaryawanFormDialog> {
       text: widget.karyawan?['nama_karyawan']?.toString() ?? '',
     );
     _passwordController = TextEditingController();
-    _selectedUnit = _availableValue(
-      widget.units,
-      'id_unit',
-      widget.karyawan?['id_unit']?.toString(),
-    );
-    _selectedRole = _availableValue(
-      widget.roles,
-      'id_role',
-      widget.karyawan?['id_role']?.toString(),
-    );
+    // [MODIFIKASI] Ambil ID unit dan role dari karyawan jika ada.
+    // Untuk Tambah Karyawan (widget.karyawan == null), default bernilai string kosong ('').
+    _selectedUnit = widget.karyawan?['id_unit']?.toString().trim() ?? '';
+    _selectedRole = widget.karyawan?['id_role']?.toString().trim() ?? '';
   }
 
   @override
@@ -725,17 +721,6 @@ class _KaryawanFormDialogState extends State<_KaryawanFormDialog> {
     _nameController.dispose();
     _passwordController.dispose();
     super.dispose();
-  }
-
-  String _availableValue(
-    List<Map<String, dynamic>> options,
-    String key,
-    String? value,
-  ) {
-    final id = value?.trim() ?? '';
-    if (id.isEmpty) return '';
-    final exists = options.any((option) => option[key]?.toString() == id);
-    return exists ? id : '';
   }
 
   void _submit() {
@@ -826,16 +811,18 @@ class _KaryawanFormDialogState extends State<_KaryawanFormDialog> {
                 const SizedBox(height: 12),
                 _buildRelationFields(),
                 const SizedBox(height: 12),
-                _fieldLabel(_isEdit ? 'Password baru' : 'Password'),
+                // [MODIFIKASI] Label dan input password dengan syarat keamanan, indikator kekuatan, angka & simbol
+                _fieldLabel(_isEdit ? 'Password baru' : 'Password (Syarat: Min 8 Karakter, Angka & Simbol)'),
                 TextFormField(
                   key: const ValueKey('karyawan_password_field'),
                   controller: _passwordController,
                   obscureText: _obscurePassword,
+                  onChanged: (_) => setState(() {}),
                   decoration:
                       _inputDecoration(
                         _isEdit
                             ? 'Kosongkan jika tidak diubah'
-                            : 'Minimal 6 karakter',
+                            : 'Min 8 karakter, contoh: Sandi123!',
                       ).copyWith(
                         suffixIcon: IconButton(
                           tooltip: _obscurePassword
@@ -858,12 +845,25 @@ class _KaryawanFormDialogState extends State<_KaryawanFormDialog> {
                     if (!_isEdit && text.isEmpty) {
                       return 'Password wajib diisi.';
                     }
-                    if (text.isNotEmpty && text.length < 6) {
-                      return 'Password minimal 6 karakter.';
+                    if (text.isNotEmpty) {
+                      if (text.length < 8) {
+                        return 'Password minimal 8 karakter.';
+                      }
+                      if (!RegExp(r'[0-9]').hasMatch(text)) {
+                        return 'Password harus mengandung minimal satu angka (0-9).';
+                      }
+                      if (!RegExp(r'[!@#\$%^&*(),.?":{}|<>_~+\-=\[\]\\]').hasMatch(text)) {
+                        return 'Password harus mengandung minimal satu simbol/karakter khusus.';
+                      }
                     }
                     return null;
                   },
                 ),
+                // [MODIFIKASI] Indikator tingkat keamanan password dan checklist syarat realtime
+                if (!_isEdit || _passwordController.text.isNotEmpty) ...[
+                  PasswordRequirementWidget(password: _passwordController.text),
+                  const SizedBox(height: 6),
+                ],
                 const SizedBox(height: 8),
                 const Text(
                   'Unit dan role menentukan penempatan karyawan serta aksesnya. '
@@ -918,6 +918,14 @@ class _KaryawanFormDialogState extends State<_KaryawanFormDialog> {
   }
 
   Widget _buildUnitField() {
+    // [MODIFIKASI] Periksa apakah unit yang terpilih ada di daftar unit aktif (widget.units).
+    // Jika tidak ada (misalnya karyawan lama dengan unit historis yang sudah di-soft delete),
+    // tampilkan opsi tersebut dengan penanda (Non-aktif / Riwayat) khusus pada form ubah karyawan ini.
+    // Pada modal Tambah Karyawan (_selectedUnit kosong), HANYA unit aktif (IT-Dev) yang muncul.
+    final hasCurrentUnit = _selectedUnit.isNotEmpty &&
+        widget.units.any((unit) => unit['id_unit']?.toString() == _selectedUnit);
+    final isInactiveUnit = _selectedUnit.isNotEmpty && !hasCurrentUnit;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -932,6 +940,14 @@ class _KaryawanFormDialogState extends State<_KaryawanFormDialog> {
               value: '',
               child: Text('Belum ditentukan', overflow: TextOverflow.ellipsis),
             ),
+            if (isInactiveUnit)
+              DropdownMenuItem(
+                value: _selectedUnit,
+                child: Text(
+                  '${widget.karyawan?['nama_unit'] ?? _selectedUnit} (Non-aktif / Riwayat)',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             for (final unit in widget.units)
               if ((unit['id_unit']?.toString() ?? '').isNotEmpty)
                 DropdownMenuItem(
@@ -946,6 +962,13 @@ class _KaryawanFormDialogState extends State<_KaryawanFormDialog> {
   }
 
   Widget _buildRoleField() {
+    // [MODIFIKASI] Periksa apakah role yang terpilih ada di daftar role aktif (widget.roles).
+    // Jika tidak ada (role historis yang sudah di-soft delete), tampilkan dengan penanda (Non-aktif / Riwayat).
+    // Pada modal Tambah Karyawan (_selectedRole kosong), HANYA role aktif yang muncul.
+    final hasCurrentRole = _selectedRole.isNotEmpty &&
+        widget.roles.any((role) => role['id_role']?.toString() == _selectedRole);
+    final isInactiveRole = _selectedRole.isNotEmpty && !hasCurrentRole;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -960,6 +983,14 @@ class _KaryawanFormDialogState extends State<_KaryawanFormDialog> {
               value: '',
               child: Text('Belum ditentukan', overflow: TextOverflow.ellipsis),
             ),
+            if (isInactiveRole)
+              DropdownMenuItem(
+                value: _selectedRole,
+                child: Text(
+                  '${widget.karyawan?['nama_role'] ?? _selectedRole} (Non-aktif / Riwayat)',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             for (final role in widget.roles)
               if ((role['id_role']?.toString() ?? '').isNotEmpty)
                 DropdownMenuItem(

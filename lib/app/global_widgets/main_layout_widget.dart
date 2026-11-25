@@ -5,6 +5,8 @@ import '../core/theme/app_colors.dart';
 import '../data/services/master_data_store.dart';
 import '../modules/auth/controllers/dashboard_controller.dart';
 import 'sidebar_widgets.dart';
+// [MODIFIKASI] Import NotificationBellWidget untuk header desktop dan mobile
+import 'notification_bell_widget.dart';
 
 class MainLayoutWidget extends StatelessWidget {
   const MainLayoutWidget({
@@ -32,7 +34,11 @@ class MainLayoutWidget extends StatelessWidget {
             backgroundColor: AppColors.surface,
             appBar: SidebarWidget.mobileAppBar(
               title: title,
-              actions: desktopActions,
+              // [MODIFIKASI] Sisipkan icon lonceng notifikasi di AppBar mobile
+              actions: [
+                const NotificationBellWidget(),
+                ...desktopActions,
+              ],
             ),
             drawer: SidebarWidget.mobileDrawer(
               child: _buildSidebar(
@@ -110,6 +116,9 @@ class MainLayoutWidget extends StatelessWidget {
                               ),
                             ),
                             const Spacer(),
+                            // [MODIFIKASI] Sisipkan icon lonceng notifikasi di Header desktop
+                            const NotificationBellWidget(),
+                            if (desktopActions.isNotEmpty) const SizedBox(width: 8),
                             ...desktopActions,
                           ],
                         ),
@@ -134,9 +143,12 @@ class MainLayoutWidget extends StatelessWidget {
     return Obx(() {
       final activeNik = dashboardController.activeNik.value.trim();
       final store = MasterDataStore.ensure();
-      final roleName = activeNik.isEmpty
-          ? ''
-          : store.roleName(store.employeeRole(activeNik));
+      // [MODIFIKASI] Ambil role name dari employee atau fallback ke activeRoleId sesi login
+      var roleId = activeNik.isEmpty ? '' : store.employeeRole(activeNik);
+      if (roleId.isEmpty && dashboardController.activeRoleId.value.isNotEmpty) {
+        roleId = dashboardController.activeRoleId.value.trim();
+      }
+      final roleName = roleId.isEmpty ? '' : store.roleName(roleId);
 
       return SidebarWidget(
         isCollapsed: isCollapsed,

@@ -8,6 +8,23 @@ class ReportController extends GetxController {
 
   final LaporanController laporanController;
 
+  // [MODIFIKASI] Ambil data laporan terbaru saat halaman Report/Rekap diinisialisasi
+  @override
+  void onInit() {
+    super.onInit();
+    laporanController.fetchLaporanData();
+  }
+
+  /// [MODIFIKASI] Reset tampilan ke kondisi awal (bersihkan semua filter, rentang tanggal, dan pencarian)
+  void resetToInitialView() {
+    dateRange.value = null;
+    selectedType.value = 'Semua';
+    selectedStatus.value = 'Semua';
+    selectedUnit.value = 'Semua';
+    searchQuery.value = '';
+    laporanController.fetchLaporanData();
+  }
+
   final dateRange = Rxn<DateTimeRange>();
   final selectedType = 'Semua'.obs;
   final selectedStatus = 'Semua'.obs;
@@ -49,10 +66,14 @@ class ReportController extends GetxController {
       final statusMatches =
           selectedStatus.value == 'Semua' ||
           status(report) == selectedStatus.value;
+      // [MODIFIKASI] Pencocokan filter unit berdasarkan nama unit dan ID unit
       final unitMatches =
           selectedUnit.value == 'Semua' ||
           _unitValues(report).any(
-            (unit) => unit.toLowerCase() == selectedUnit.value.toLowerCase(),
+            (unit) =>
+                unit.toLowerCase() == selectedUnit.value.toLowerCase() ||
+                laporanController.unitName(unit).toLowerCase() ==
+                    selectedUnit.value.toLowerCase(),
           );
       final typeMatches = switch (selectedType.value) {
         'Laporan' => actions(report).isEmpty,
@@ -60,12 +81,17 @@ class ReportController extends GetxController {
         _ => true,
       };
       final searchableValues = [
+        _value(report, 'nomor_laporan'),
+        _value(report, 'id_laporan'),
         _value(report, 'perihal'),
         _value(report, 'id_nik_pelapor', 'nik_pelapor'),
         _value(report, 'id_unit_pelapor', 'unit_pelapor'),
         _value(report, 'id_nik_pic', 'nik_pic'),
         _value(report, 'id_unit_pic', 'unit_pic', 'nama_unit_pic'),
         _value(report, 'id_kategori', 'kategori', 'nama_kategori'),
+        // [MODIFIKASI] Sertakan nama PIC dan nama Pelapor ke pencarian
+        pic(report),
+        reporter(report),
       ];
       final matchesKeyword =
           keyword.isEmpty ||
@@ -90,8 +116,15 @@ class ReportController extends GetxController {
     return reports;
   }
 
+  // [MODIFIKASI] Getter units menghasilkan daftar nama unit (bukan ID) dari master data dan riwayat laporan
   List<String> get units {
     final values = <String>{};
+    for (final unit in laporanController.listUnit) {
+      final name = unit['nama_unit']?.toString().trim();
+      if (name != null && name.isNotEmpty && name != '-') {
+        values.add(name);
+      }
+    }
     for (final report in laporanController.listLaporan) {
       values.addAll(_unitValues(report));
     }
@@ -149,17 +182,17 @@ class ReportController extends GetxController {
     if (date == null) return '-';
     final day = date.day.toString().padLeft(2, '0');
     final month = date.month.toString().padLeft(2, '0');
-    return '$day/$month/${date.year}';
+    // [MODIFIKASI] Sesuaikan format tanggal ke DD-MM-YYYY
+    return '$day-$month-${date.year}';
   }
 
   String status(Map<String, dynamic> report) {
     final value = _value(report, 'status');
-    return switch (value.trim().toLowerCase()) {
-      'done' || 'selesai' => 'Done',
-      'on progress' ||
-      'on progres' ||
-      'proses' ||
-      'in progress' => 'On Progress',
+    return switch (value.trim().toUpperCase()) {
+      'COMPLETED' || 'DONE' || 'SELESAI' => 'Done',
+      'PENDING_APPROVAL' || 'PENDING APPROVAL' => 'Menunggu Approval',
+      'RETURNED' || 'DIKEMBALIKAN' => 'Dikembalikan',
+      'IN_PROGRESS' || 'ON PROGRESS' || 'PROSES' => 'On Progress',
       '' || '-' => 'Open',
       _ => value,
     };
@@ -191,8 +224,65 @@ class ReportController extends GetxController {
     return values.isEmpty ? '-' : values.join(' · ');
   }
 
-  String pic(Map<String, dynamic> report) =>
-      _personValue(report, 'id_nik_pic', 'id_unit_pic', 'unit_pic');
+  // [MODIFIKASI] Menampilkan nama karyawan PIC dan unitnya (contoh: "Budi Teknisi · Umum & Fasilitas")
+  String pic(Map<String, dynamic> report) {
+    // 1. Ambil jika sudah memiliki nama_pic_unit yang sudah dinormalisasi lengkap
+    final storedPicUnit = report['nama_pic_unit']?.toString().trim();
+    if (storedPicUnit != null && storedPicUnit.isNotEmpty && storedPicUnit != '-') {
+      return storedPicUnit;
+    }
+
+    // 2. Ambil dari id_nik_pic, petakan setiap NIK ke nama dan unit karyawan
+    final rawNiks = _value(report, 'id_nik_pic', 'nik_pic');
+    if (rawNiks != '-' && rawNiks.isNotEmpty) {
+      final niks = rawNiks
+          .split(',')
+          .map((n) => n.trim())
+          .where((n) => n.isNotEmpty)
+          .toList();
+      if (niks.isNotEmpty) {
+        final entries = niks.map((nik) {
+          final name = laporanController.userName(nik);
+          var uName = laporanController.employeeUnitName(nik);
+          if (uName.isEmpty) {
+            final repUnit = _value(report, 'nama_unit_pic', 'id_unit_pic', 'unit_pic');
+            if (repUnit != '-' && repUnit.isNotEmpty) {
+              uName = laporanController.unitName(repUnit);
+            }
+          }
+          final values = [
+            (name.isNotEmpty && name != nik) ? name : nik,
+            uName,
+          ].where((v) => v.isNotEmpty && v != '-').toList();
+          return values.join(' · ');
+        }).where((e) => e.isNotEmpty).toList();
+
+        if (entries.isNotEmpty) {
+          return entries.join(', ');
+        }
+      }
+    }
+
+    // 3. Fallback jika ada nama_pic tersimpan
+    final storedName = report['nama_pic']?.toString().trim();
+    if (storedName != null && storedName.isNotEmpty && storedName != '-') {
+      final repUnit = _value(report, 'nama_unit_pic', 'id_unit_pic', 'unit_pic');
+      final uName = (repUnit != '-' && repUnit.isNotEmpty)
+          ? laporanController.unitName(repUnit)
+          : '';
+      final values = [storedName, uName].where((v) => v.isNotEmpty && v != '-').toList();
+      return values.join(' · ');
+    }
+
+    // 4. Fallback unit bila PIC belum ditentukan
+    final unit = _value(report, 'nama_unit_pic', 'id_unit_pic', 'unit_pic');
+    if (unit != '-' && unit.isNotEmpty) {
+      final uName = laporanController.unitName(unit);
+      return uName.isNotEmpty ? uName : unit;
+    }
+
+    return '-';
+  }
 
   String reportTitle(Map<String, dynamic> report) => _value(report, 'perihal');
 
@@ -236,29 +326,52 @@ class ReportController extends GetxController {
     return action['selesai'] == true;
   }
 
+  // [MODIFIKASI] Petakan seluruh nilai unit di laporan ke nama unit resmi (bukan ID)
   List<String> _unitValues(Map<String, dynamic> report) {
-    return [
-      _value(report, 'id_unit_pic', 'unit_pic', 'nama_unit_pic'),
-      _value(report, 'id_unit_pelapor', 'unit_pelapor'),
-    ].where((value) => value.isNotEmpty && value != '-').toSet().toList();
+    final values = <String>[];
+
+    // 1. Unit Pelapor
+    final rawPelapor = _value(report, 'nama_unit_pelapor', 'id_unit_pelapor', 'unit_pelapor');
+    if (rawPelapor != '-' && rawPelapor.isNotEmpty) {
+      final uName = laporanController.unitName(rawPelapor);
+      if (uName.isNotEmpty && uName != '-') {
+        values.add(uName);
+      } else {
+        values.add(rawPelapor);
+      }
+    }
+
+    // 2. Unit dari NIK Pelapor
+    final pelaporNik = _value(report, 'id_nik_pelapor', 'nik_pelapor');
+    if (pelaporNik != '-' && pelaporNik.isNotEmpty) {
+      final uName = laporanController.employeeUnitName(pelaporNik);
+      if (uName.isNotEmpty && uName != '-') values.add(uName);
+    }
+
+    // 3. Unit PIC
+    final rawPicUnit = _value(report, 'nama_unit_pic', 'id_unit_pic', 'unit_pic');
+    if (rawPicUnit != '-' && rawPicUnit.isNotEmpty) {
+      final uName = laporanController.unitName(rawPicUnit);
+      if (uName.isNotEmpty && uName != '-') {
+        values.add(uName);
+      } else {
+        values.add(rawPicUnit);
+      }
+    }
+
+    // 4. Unit kerja dari masing-masing PIC
+    final rawNiks = _value(report, 'id_nik_pic', 'nik_pic');
+    if (rawNiks != '-' && rawNiks.isNotEmpty) {
+      for (final nik in rawNiks.split(',').map((s) => s.trim())) {
+        final uName = laporanController.employeeUnitName(nik);
+        if (uName.isNotEmpty && uName != '-') values.add(uName);
+      }
+    }
+
+    return values.where((value) => value.isNotEmpty && value != '-').toSet().toList();
   }
 
-  String _personValue(
-    Map<String, dynamic> report,
-    String idKey,
-    String unitKey, [
-    String? alternateUnitKey,
-  ]) {
-    final id = _value(report, idKey);
-    final unit = alternateUnitKey == null
-        ? _value(report, unitKey)
-        : _value(report, unitKey, alternateUnitKey);
-    final values = [
-      id,
-      unit,
-    ].where((value) => value.isNotEmpty && value != '-');
-    return values.isEmpty ? '-' : values.join(' - ');
-  }
+  // [MODIFIKASI] _personValue dihapus karena fungsi pic() dan reporter() sudah memetakan NIK ke nama karyawan secara spesifik.
 
   String _value(
     Map<String, dynamic> report,

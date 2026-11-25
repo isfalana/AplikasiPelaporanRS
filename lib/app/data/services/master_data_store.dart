@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:get/get.dart';
+import 'api_services.dart';
 
 /// Penyimpanan master data di memori untuk simulasi antar halaman.
 ///
@@ -65,6 +67,93 @@ class MasterDataStore extends GetxController {
   final listRole = <Map<String, dynamic>>[].obs;
   final listKategori = <Map<String, dynamic>>[].obs;
   final listKaryawan = <Map<String, dynamic>>[].obs;
+  final listPrioritas = <Map<String, dynamic>>[].obs;
+
+  @override
+  void onInit() {
+    super.onInit();
+    // [MODIFIKASI] Otomatis ambil data terbaru dari backend saat store diinisialisasi
+    fetchFromBackend();
+  }
+
+  /// [MODIFIKASI] Mengambil data master lengkap dari backend database
+  /// Mengambil data unit, kategori, role, karyawan/users, dan prioritas
+  Future<void> fetchFromBackend() async {
+    try {
+      final dio = await ApiService.getClient();
+      final responses = await Future.wait([
+        dio.get('/master/units'),
+        dio.get('/master/kategoris'),
+        dio.get('/master/roles'),
+        dio.get('/master/users'),
+        dio.get('/master/prioritas'),
+      ]);
+
+      if (responses[0].statusCode == 200 && responses[0].data != null) {
+        final data = responses[0].data['data'];
+        if (data is List) {
+          listUnit.assignAll(data.map((e) => Map<String, dynamic>.from(e)).toList());
+        }
+      }
+      if (responses[1].statusCode == 200 && responses[1].data != null) {
+        final data = responses[1].data['data'];
+        if (data is List) {
+          // [MODIFIKASI] Normalisasi agar nama_kategori dan jenis_kategori saling terisi
+          final items = data.map((e) {
+            final m = Map<String, dynamic>.from(e);
+            final name = m['nama_kategori'] ?? m['jenis_kategori'] ?? '';
+            m['nama_kategori'] = name;
+            m['jenis_kategori'] = name;
+            return m;
+          }).toList();
+          listKategori.assignAll(items);
+        }
+      }
+      if (responses[2].statusCode == 200 && responses[2].data != null) {
+        final data = responses[2].data['data'];
+        if (data is List) {
+          // [MODIFIKASI] Normalisasi field permissions agar selalu berupa List<String> di memori
+          final roles = data.map((e) {
+            final m = Map<String, dynamic>.from(e);
+            m['permissions'] = parsePermissions(m['permissions']);
+            return m;
+          }).toList();
+          listRole.assignAll(roles);
+        }
+      }
+      if (responses[3].statusCode == 200 && responses[3].data != null) {
+        final data = responses[3].data['data'];
+        if (data is List) {
+          // [MODIFIKASI] Filter karyawan aktif (tidak di-soft delete) untuk listKaryawan,
+          // sekaligus daftarkan nama historis agar riwayat laporan lama tetap menampilkan nama aslinya
+          final activeUsers = <Map<String, dynamic>>[];
+          for (final item in data) {
+            if (item is Map) {
+              final m = Map<String, dynamic>.from(item);
+              final nik = m['id_nik']?.toString().trim() ?? '';
+              final name = m['nama_karyawan']?.toString().trim() ?? '';
+              if (nik.isNotEmpty && name.isNotEmpty) {
+                registerEmployeeName(nik, name);
+              }
+              if (m['deleted_at'] == null) {
+                activeUsers.add(m);
+              }
+            }
+          }
+          listKaryawan.assignAll(activeUsers);
+        }
+      }
+      // [MODIFIKASI] Parsing data master prioritas dari backend
+      if (responses[4].statusCode == 200 && responses[4].data != null) {
+        final data = responses[4].data['data'];
+        if (data is List) {
+          listPrioritas.assignAll(data.map((e) => Map<String, dynamic>.from(e)).toList());
+        }
+      }
+    } catch (_) {
+      // Biarkan data demo sebagai cadangan jika offline
+    }
+  }
 
   /// Ambil store yang sama untuk seluruh halaman.
   ///
@@ -78,13 +167,45 @@ class MasterDataStore extends GetxController {
     return Get.put(MasterDataStore(), permanent: true);
   }
 
+  // [MODIFIKASI] Cache nama unit historis agar unit yang sudah di-soft-delete tetap menampilkan nama aslinya bukan ID
+  final Map<String, String> _historicalUnitNames = {};
+
+  /// Salinan read-only dari cache unit historis
+  Map<String, String> get historicalUnitNames => Map.unmodifiable(_historicalUnitNames);
+
+  /// Daftarkan pemetaan ID unit ke nama unit historis
+  void registerUnitName(String idUnit, String unitName) {
+    final id = idUnit.trim();
+    final name = unitName.trim();
+    if (id.isNotEmpty && name.isNotEmpty && id != name) {
+      _historicalUnitNames[id] = name;
+    }
+  }
+
   /// Nama unit dari [idUnit]. Mengembalikan [idUnit] bila tidak ditemukan.
   String unitName(String idUnit) {
     final id = idUnit.trim();
     if (id.isEmpty) return '';
     final unit = _firstWhere(listUnit, 'id_unit', id);
     final name = unit?['nama_unit']?.toString().trim() ?? '';
-    return name.isEmpty ? id : name;
+    if (name.isNotEmpty && name != id) return name;
+
+    // [MODIFIKASI] Periksa cache unit historis bila unit telah di-soft-delete
+    if (_historicalUnitNames.containsKey(id)) {
+      return _historicalUnitNames[id]!;
+    }
+
+    // [MODIFIKASI] Cari juga di data karyawan yang mungkin memiliki relasi nama_unit historis
+    for (final k in listKaryawan) {
+      if (k['id_unit']?.toString().trim() == id) {
+        final kUnitName = k['nama_unit']?.toString().trim() ?? '';
+        if (kUnitName.isNotEmpty && kUnitName != id) {
+          _historicalUnitNames[id] = kUnitName;
+          return kUnitName;
+        }
+      }
+    }
+    return id;
   }
 
   /// Nama role dari [idRole]. Mengembalikan [idRole] bila tidak ditemukan.
@@ -102,8 +223,25 @@ class MasterDataStore extends GetxController {
     final id = idKategori.trim();
     if (id.isEmpty) return '';
     final kategori = _firstWhere(listKategori, 'id_kategori', id);
-    final name = kategori?['jenis_kategori']?.toString().trim() ?? '';
+    final name = kategori?['nama_kategori']?.toString().trim() ??
+        kategori?['jenis_kategori']?.toString().trim() ??
+        '';
     return name.isEmpty ? id : name;
+  }
+
+  // [MODIFIKASI] Cache nama karyawan historis agar karyawan yang sudah di-soft-delete tetap menampilkan namanya
+  final Map<String, String> _historicalEmployeeNames = {};
+
+  /// Salinan read-only dari cache nama karyawan historis
+  Map<String, String> get historicalEmployeeNames => Map.unmodifiable(_historicalEmployeeNames);
+
+  /// Daftarkan pemetaan NIK ke nama karyawan historis
+  void registerEmployeeName(String nik, String employeeName) {
+    final k = nik.trim();
+    final n = employeeName.trim();
+    if (k.isNotEmpty && n.isNotEmpty && k != n) {
+      _historicalEmployeeNames[k] = n;
+    }
   }
 
   /// Data karyawan dari [nik], atau null bila tidak ditemukan.
@@ -118,7 +256,11 @@ class MasterDataStore extends GetxController {
     final key = nik.trim();
     if (key.isEmpty) return '';
     final name = employee(key)?['nama_karyawan']?.toString().trim() ?? '';
-    return name.isEmpty ? key : name;
+    if (name.isNotEmpty && name != key) return name;
+    if (_historicalEmployeeNames.containsKey(key)) {
+      return _historicalEmployeeNames[key]!;
+    }
+    return key;
   }
 
   /// ID unit milik karyawan [nik], atau string kosong bila tidak ditemukan.
@@ -159,12 +301,59 @@ class MasterDataStore extends GetxController {
       values.addAll(raw.toString().split(RegExp(r'[,\s]+')));
     }
 
+    // [MODIFIKASI] Wildcard permission '*' memberikan seluruh hak akses
     if (values.contains(wildcardPermission)) return allPermissions.toSet();
-    if (values.isEmpty &&
-        role['nama_role']?.toString().trim().toLowerCase() == 'superadmin') {
-      return allPermissions.toSet();
+    final roleNameLower = role['nama_role']?.toString().trim().toLowerCase() ?? '';
+    final roleId = role['id_role']?.toString().trim() ?? '';
+
+    // [MODIFIKASI] Hanya gunakan default permission jika role belum pernah diatur hak aksesnya sama sekali (raw == null)
+    if (raw == null) {
+      if (roleId == 'R-01' || roleNameLower == 'admin' || roleNameLower == 'superadmin') {
+        return allPermissions.toSet();
+      }
+      return {
+        'laporan.lihat',
+        'laporan.buat',
+        'laporan.ubah',
+        'laporan.validasi',
+        'laporan.buka_kembali',
+        'tindakan.lihat',
+        'tindakan.ubah',
+        'report.lihat',
+      };
     }
+
+    // [MODIFIKASI] Bila role telah diatur hak aksesnya (raw != null), kembalikan HANYA permission yang aktif (ada di values).
+    // Bila checkbox non-aktif (false), permission tersebut tidak ada di values sehingga tidak mendapatkan hak akses.
     return allPermissions.where(values.contains).toSet();
+  }
+
+  // [MODIFIKASI] Helper static untuk parsing permissions dari berbagai format database backend
+  static List<String> parsePermissions(dynamic raw) {
+    if (raw == null) return [];
+    if (raw is Iterable) {
+      return raw
+          .map((e) {
+            if (e is Map) {
+              return (e['permission'] ?? e['key'] ?? e['name'] ?? e['id_permission'])?.toString();
+            }
+            return e?.toString();
+          })
+          .whereType<String>()
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+    }
+    final text = raw.toString().trim();
+    if (text.startsWith('[') || text.startsWith('{')) {
+      try {
+        final decoded = jsonDecode(text);
+        if (decoded is Iterable) {
+          return decoded.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toList();
+        }
+      } catch (_) {}
+    }
+    return text.split(RegExp(r'[,\s]+')).where((s) => s.isNotEmpty).toList();
   }
 
   /// Daftar hak akses milik karyawan [nik] berdasarkan role-nya.
@@ -194,34 +383,34 @@ class MasterDataStore extends GetxController {
     return null;
   }
 
+  // [MODIFIKASI] Sinkronisasi fallback data demo awal dengan data seeder PostgreSQL backend
   void _seedDemoData() {
     listUnit.assignAll([
-      {'id_unit': 'UNIT-UMUM', 'nama_unit': 'Unit Umum'},
-      {'id_unit': 'UNIT-IGD', 'nama_unit': 'Instalasi Gawat Darurat'},
-      {'id_unit': 'UNIT-IT', 'nama_unit': 'Teknologi Informasi'},
-      {'id_unit': 'UNIT-SDM', 'nama_unit': 'Sumber Daya Manusia'},
+      {'id_unit': 'U-IT', 'nama_unit': 'Information Technology'},
+      {'id_unit': 'U-PENDAFTARAN', 'nama_unit': 'Pendaftaran & Rekam Medis'},
+      {'id_unit': 'U-UMUM', 'nama_unit': 'Umum & Fasilitas'},
     ]);
 
     listRole.assignAll([
       {
-        'id_role': 'ROLE-01',
-        'nama_role': 'karu',
+        'id_role': 'R-01',
+        'nama_role': 'Admin',
+        'permissions': [wildcardPermission],
+        'created_at': '2026-10-02T08:10:00',
+      },
+      {
+        'id_role': 'R-02',
+        'nama_role': 'User',
         'permissions': [
           'laporan.lihat',
           'laporan.buat',
           'laporan.ubah',
           'laporan.validasi',
+          'laporan.buka_kembali',
           'tindakan.lihat',
           'tindakan.ubah',
           'report.lihat',
-          'report.export',
         ],
-        'created_at': '2026-10-02T08:10:00',
-      },
-      {
-        'id_role': 'ROLE-02',
-        'nama_role': 'superadmin',
-        'permissions': [wildcardPermission],
         'created_at': '2026-10-02T08:12:00',
       },
     ]);
@@ -229,49 +418,59 @@ class MasterDataStore extends GetxController {
     listKategori.assignAll([
       {
         'id_kategori': 'KAT-01',
-        'jenis_kategori': 'permasalahan',
+        'nama_kategori': 'Perbaikan / Maintenance',
+        'jenis_kategori': 'Perbaikan / Maintenance',
         'created_at': '2026-10-02T08:15:00',
       },
       {
         'id_kategori': 'KAT-02',
-        'jenis_kategori': 'Informasi',
+        'nama_kategori': 'Pengadaan Barang',
+        'jenis_kategori': 'Pengadaan Barang',
         'created_at': '2026-10-02T08:20:00',
       },
       {
         'id_kategori': 'KAT-03',
-        'jenis_kategori': 'Arahan Direktur',
+        'nama_kategori': 'Komplain Layanan',
+        'jenis_kategori': 'Komplain Layanan',
         'created_at': '2026-10-03T09:05:00',
       },
+    ]);
+
+    listPrioritas.assignAll([
+      {'id_prioritas': 'P-01', 'nama_prioritas': 'Kritis', 'urutan': 1, 'batas_sisa_hari': 0},
+      {'id_prioritas': 'P-02', 'nama_prioritas': 'Tinggi', 'urutan': 2, 'batas_sisa_hari': 1},
+      {'id_prioritas': 'P-03', 'nama_prioritas': 'Sedang', 'urutan': 3, 'batas_sisa_hari': 3},
+      {'id_prioritas': 'P-04', 'nama_prioritas': 'Rendah', 'urutan': 4, 'batas_sisa_hari': 7},
     ]);
 
     listKaryawan.assignAll([
       {
         'id_nik': 'NIK-001',
-        'nama_karyawan': 'dr. Enung Sp.PD',
-        'id_unit': 'UNIT-IGD',
-        'id_role': 'ROLE-01',
-        'last_login': '2026-11-11T08:24:00',
+        'nama_karyawan': 'Admin IT',
+        'id_unit': 'U-IT',
+        'id_role': 'R-01',
+        'last_login': '2026-11-19T08:00:00',
       },
       {
         'id_nik': 'NIK-002',
-        'nama_karyawan': 'Rina Kartika',
-        'id_unit': 'UNIT-UMUM',
-        'id_role': 'ROLE-02',
-        'last_login': '2026-11-12T07:05:00',
+        'nama_karyawan': 'Siti Aminah',
+        'id_unit': 'U-PENDAFTARAN',
+        'id_role': 'R-02',
+        'last_login': '2026-11-19T08:00:00',
       },
       {
         'id_nik': 'NIK-003',
-        'nama_karyawan': 'Budi Santoso',
-        'id_unit': 'UNIT-SDM',
-        'id_role': 'ROLE-01',
+        'nama_karyawan': 'Budi Teknisi',
+        'id_unit': 'U-UMUM',
+        'id_role': 'R-02',
         'last_login': null,
       },
       {
         'id_nik': 'NIK-004',
-        'nama_karyawan': 'Andi Pratama',
-        'id_unit': 'UNIT-IT',
-        'id_role': 'ROLE-02',
-        'last_login': '2026-11-10T16:40:00',
+        'nama_karyawan': 'Andi IT',
+        'id_unit': 'U-IT',
+        'id_role': 'R-02',
+        'last_login': '2026-11-19T08:00:00',
       },
     ]);
   }
