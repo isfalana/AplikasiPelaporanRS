@@ -10,7 +10,8 @@ import '../../../data/services/api_services.dart';
 /// `/template-tindakan` pada backend. Bila server belum terhubung, halaman
 /// memakai data contoh supaya tetap bisa dipakai.
 class MasterTemplateTindakanController extends GetxController {
-  static const _endpoint = '/template-tindakan';
+  // [MODIFIKASI] Endpoint diselaraskan dengan backend masterRoutes.js (/master/templates)
+  static const _endpoint = '/master/templates';
 
   final listTemplate = <Map<String, dynamic>>[].obs;
   final isLoading = false.obs;
@@ -40,26 +41,21 @@ class MasterTemplateTindakanController extends GetxController {
     }).toList();
   }
 
-  /// Buat ID template baru yang belum dipakai, misalnya `TPL-01`.
+  /// [MODIFIKASI] Buat ID template baru yang melanjutkan nomor tertinggi (MAX + 1)
+  /// agar data template yang sudah di-soft-delete tidak tertimpa dan tetap berfungsi sebagai riwayat (audit trail).
   String generateTemplateId() {
-    final used = listTemplate
-        .map(
-          (template) => template['id_template']?.toString().toUpperCase() ?? '',
-        )
-        .toSet();
-    var next = 1;
-    for (final id in used) {
+    var maxNumber = 0;
+    for (final template in listTemplate) {
+      final id = template['id_template']?.toString().toUpperCase() ?? '';
       final match = RegExp(r'^TPL-(\d+)$').firstMatch(id);
-      final number = int.tryParse(match?.group(1) ?? '');
-      if (number != null && number >= next) next = number + 1;
+      if (match != null) {
+        final number = int.tryParse(match.group(1)!);
+        if (number != null && number > maxNumber) {
+          maxNumber = number;
+        }
+      }
     }
-
-    var candidate = 'TPL-${next.toString().padLeft(2, '0')}';
-    while (used.contains(candidate)) {
-      next++;
-      candidate = 'TPL-${next.toString().padLeft(2, '0')}';
-    }
-    return candidate;
+    return 'TPL-${(maxNumber + 1).toString().padLeft(2, '0')}';
   }
 
   Future<void> fetchTemplate() async {
@@ -126,18 +122,17 @@ class MasterTemplateTindakanController extends GetxController {
 
     isSaving.value = true;
     try {
-      if (!usingDemoData.value) {
-        final dio = await ApiService.getClient();
-        final data = <String, dynamic>{
-          'id_template': id,
-          'nama_template': nama,
-          'list_tindakan': detail,
-        };
-        if (isCreate) {
-          await dio.post(_endpoint, data: data);
-        } else {
-          await dio.put('$_endpoint/$originalId', data: data);
-        }
+      // [MODIFIKASI] Selalu simpan template ke backend API /master/templates
+      final dio = await ApiService.getClient();
+      final data = <String, dynamic>{
+        'id_template': id,
+        'nama_template': nama,
+        'list_tindakan': detail,
+      };
+      if (isCreate) {
+        await dio.post(_endpoint, data: data);
+      } else {
+        await dio.put('$_endpoint/$originalId', data: data);
       }
       _applyLocally(originalId: originalId, row: row);
       return null;
@@ -155,10 +150,9 @@ class MasterTemplateTindakanController extends GetxController {
 
     isSaving.value = true;
     try {
-      if (!usingDemoData.value) {
-        final dio = await ApiService.getClient();
-        await dio.delete('$_endpoint/$id');
-      }
+      // [MODIFIKASI] Hapus template langsung dari database backend
+      final dio = await ApiService.getClient();
+      await dio.delete('$_endpoint/$id');
       listTemplate.removeWhere(
         (template) => template['id_template']?.toString() == id,
       );
@@ -202,13 +196,14 @@ class MasterTemplateTindakanController extends GetxController {
     listTemplate.refresh();
   }
 
+  // [MODIFIKASI] Normalisasi template membaca 'details' dan 'nama_tindakan' dari backend
   Map<String, dynamic> _normalize(Map<String, dynamic> row) {
     return {
       'id_template': (row['id_template'] ?? row['idTemplate'] ?? '').toString(),
       'nama_template': (row['nama_template'] ?? row['namaTemplate'] ?? '')
           .toString(),
       'list_tindakan': _normalizeActions(
-        row['list_tindakan'] ?? row['listTindakan'],
+        row['details'] ?? row['list_tindakan'] ?? row['listTindakan'],
       ),
       'created_at': row['created_at'] ?? row['createdAt'],
       'updated_at': row['updated_at'] ?? row['updatedAt'],

@@ -30,6 +30,8 @@ class ReportStyleCard extends StatelessWidget {
   static Color statusColor(String status) {
     return switch (status) {
       'Done' => AppColors.success,
+      'Menunggu Approval' => Colors.purple,
+      'Dikembalikan' => Colors.redAccent,
       'On Progress' => AppColors.info,
       _ => AppColors.warning,
     };

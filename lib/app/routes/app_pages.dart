@@ -22,7 +22,8 @@ import '../modules/master/views/master_template_tindakan_view.dart';
 // Import nanti jika module sudah dibuat
 import '../modules/auth/bindings/auth_binding.dart';
 import '../modules/auth/views/login_view.dart';
-// import '../modules/dashboard/views/dashboard_view.dart';
+// [MODIFIKASI] Import AuthMiddleware untuk pengamanan seluruh rute
+import '../middleware/auth_middleware.dart';
 
 part 'app_routes.dart';
 
@@ -34,18 +35,14 @@ class AppPages {
       name: Routes.LOGIN,
       page: () => const LoginView(),
       binding: AuthBinding(),
+      middlewares: [AuthMiddleware()],
     ),
-    // Kita komentari dulu sampai view-nya dibuat
-
-    // GetPage(
-    //   name: Routes.LOGIN,
-    //   page: () => const LoginView(),
-    // ),
     GetPage(
       name: Routes.DASHBOARD,
       page: () => const DashboardView(),
       binding: DashboardBinding(),
       transition: Transition.noTransition,
+      middlewares: [AuthMiddleware()],
     ),
 
     GetPage(
@@ -53,48 +50,56 @@ class AppPages {
       page: () => const LaporanView(),
       binding: LaporanBinding(),
       transition: Transition.noTransition,
+      middlewares: [AuthMiddleware()],
     ),
     GetPage(
       name: Routes.TINDAKAN,
       page: () => const TindakanView(),
       binding: TindakanBinding(),
       transition: Transition.noTransition,
+      middlewares: [AuthMiddleware()],
     ),
     GetPage(
       name: Routes.REPORT,
       page: () => const ReportView(),
       binding: ReportBinding(),
       transition: Transition.noTransition,
+      middlewares: [AuthMiddleware()],
     ),
     GetPage(
       name: Routes.MASTER_UNIT,
       page: () => const MasterUnitView(),
       binding: MasterUnitBinding(),
       transition: Transition.noTransition,
+      middlewares: [AuthMiddleware()],
     ),
     GetPage(
       name: Routes.MASTER_KARYAWAN,
       page: () => const MasterKaryawanView(),
       binding: MasterKaryawanBinding(),
       transition: Transition.noTransition,
+      middlewares: [AuthMiddleware()],
     ),
     GetPage(
       name: Routes.MASTER_KATEGORI,
       page: () => const MasterKategoriView(),
       binding: MasterKategoriBinding(),
       transition: Transition.noTransition,
+      middlewares: [AuthMiddleware()],
     ),
     GetPage(
       name: Routes.MASTER_TEMPLATE_TINDAKAN,
       page: () => const MasterTemplateTindakanView(),
       binding: MasterTemplateTindakanBinding(),
       transition: Transition.noTransition,
+      middlewares: [AuthMiddleware()],
     ),
     GetPage(
       name: Routes.MASTER_ROLE,
       page: () => const MasterRoleView(),
       binding: MasterRoleBinding(),
       transition: Transition.noTransition,
+      middlewares: [AuthMiddleware()],
     ),
   ];
 }

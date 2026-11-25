@@ -671,9 +671,44 @@ class _RoleFormDialogState extends State<_RoleFormDialog> {
                       : null,
                 ),
                 const SizedBox(height: 16),
-                _fieldLabel('Hak Akses'),
+                // [MODIFIKASI] Header Hak Akses dengan tombol pintasan Pilih Semua dan Hapus Semua
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _fieldLabel('Hak Akses'),
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed: () {
+                            setState(() {
+                              _selectedPermissions.addAll(MasterDataStore.allPermissions);
+                            });
+                          },
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                          ),
+                          child: const Text('Pilih Semua', style: TextStyle(fontSize: 11)),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            setState(() {
+                              _selectedPermissions.clear();
+                            });
+                          },
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            foregroundColor: AppColors.error,
+                          ),
+                          child: const Text('Hapus Semua', style: TextStyle(fontSize: 11)),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
                 const Text(
-                  'Pilih menu dan tindakan yang boleh diakses role ini.',
+                  'Pilih menu dan tindakan yang boleh diakses role ini (aktif = dapat akses, non-aktif = tidak dapat akses).',
                   style: TextStyle(fontSize: 11, color: AppColors.textWeak),
                 ),
                 const SizedBox(height: 8),

@@ -10,7 +10,8 @@ import '../../../data/services/master_data_store.dart';
 /// terhubung, halaman memakai data contoh dari [MasterDataStore] supaya tetap
 /// bisa dipakai dan tetap terhubung dengan halaman Laporan/Report.
 class MasterKategoriController extends GetxController {
-  static const _endpoint = '/kategori';
+  // [MODIFIKASI] Endpoint diselaraskan dengan backend masterRoutes.js (/master/kategoris)
+  static const _endpoint = '/master/kategoris';
 
   MasterDataStore get _store => MasterDataStore.ensure();
 
@@ -39,26 +40,21 @@ class MasterKategoriController extends GetxController {
     }).toList();
   }
 
-  /// Buat ID kategori baru yang belum dipakai, misalnya `KAT-06`.
+  /// [MODIFIKASI] Buat ID kategori baru yang melanjutkan nomor tertinggi (MAX + 1)
+  /// agar data kategori yang sudah di-soft-delete tidak tertimpa dan tetap berfungsi sebagai riwayat (audit trail).
   String generateKategoriId() {
-    final used = listKategori
-        .map(
-          (kategori) => kategori['id_kategori']?.toString().toUpperCase() ?? '',
-        )
-        .toSet();
-    var next = 1;
-    for (final id in used) {
+    var maxNumber = 0;
+    for (final kategori in listKategori) {
+      final id = kategori['id_kategori']?.toString().toUpperCase() ?? '';
       final match = RegExp(r'^KAT-(\d+)$').firstMatch(id);
-      final number = int.tryParse(match?.group(1) ?? '');
-      if (number != null && number >= next) next = number + 1;
+      if (match != null) {
+        final number = int.tryParse(match.group(1)!);
+        if (number != null && number > maxNumber) {
+          maxNumber = number;
+        }
+      }
     }
-
-    var candidate = 'KAT-${next.toString().padLeft(2, '0')}';
-    while (used.contains(candidate)) {
-      next++;
-      candidate = 'KAT-${next.toString().padLeft(2, '0')}';
-    }
-    return candidate;
+    return 'KAT-${(maxNumber + 1).toString().padLeft(2, '0')}';
   }
 
   Future<void> fetchKategori() async {
@@ -104,6 +100,7 @@ class MasterKategoriController extends GetxController {
     }
     final row = <String, dynamic>{
       'id_kategori': id,
+      'nama_kategori': jenis,
       'jenis_kategori': jenis,
       'created_at': existing?['created_at'] ?? now,
       'updated_at': now,
@@ -111,22 +108,23 @@ class MasterKategoriController extends GetxController {
 
     isSaving.value = true;
     try {
-      if (!usingDemoData.value) {
-        final dio = await ApiService.getClient();
-        final data = <String, dynamic>{
-          'id_kategori': id,
-          'jenis_kategori': jenis,
-        };
-        if (isCreate) {
-          await dio.post(_endpoint, data: data);
-        } else {
-          await dio.put('$_endpoint/$originalId', data: data);
-        }
+      // [MODIFIKASI] Selalu simpan ke endpoint backend /master/kategoris
+      final dio = await ApiService.getClient();
+      final data = <String, dynamic>{
+        'id_kategori': id,
+        'nama_kategori': jenis,
+        'jenis_kategori': jenis,
+      };
+      if (isCreate) {
+        await dio.post(_endpoint, data: data);
+      } else {
+        await dio.put('$_endpoint/$originalId', data: data);
       }
       _applyLocally(originalId: originalId, row: row);
+      await MasterDataStore.ensure().fetchFromBackend();
       return null;
     } on DioException catch (error) {
-      return _errorMessage(error, 'Gagal menyimpan kategori.');
+      return _errorMessage(error, 'Gagal menyimpan kategori ke database.');
     } finally {
       isSaving.value = false;
     }
@@ -139,17 +137,17 @@ class MasterKategoriController extends GetxController {
 
     isSaving.value = true;
     try {
-      if (!usingDemoData.value) {
-        final dio = await ApiService.getClient();
-        await dio.delete('$_endpoint/$id');
-      }
+      // [MODIFIKASI] Hapus kategori dari backend database
+      final dio = await ApiService.getClient();
+      await dio.delete('$_endpoint/$id');
       listKategori.removeWhere(
         (kategori) => kategori['id_kategori']?.toString() == id,
       );
       listKategori.refresh();
+      await MasterDataStore.ensure().fetchFromBackend();
       return null;
     } on DioException catch (error) {
-      return _errorMessage(error, 'Gagal menghapus kategori.');
+      return _errorMessage(error, 'Gagal menghapus kategori dari database.');
     } finally {
       isSaving.value = false;
     }
@@ -186,11 +184,13 @@ class MasterKategoriController extends GetxController {
     listKategori.refresh();
   }
 
+  // [MODIFIKASI] Normalisasi kategori mendukung nama_kategori dari database PostgreSQL
   Map<String, dynamic> _normalize(Map<String, dynamic> row) {
+    final name = (row['nama_kategori'] ?? row['jenis_kategori'] ?? row['jenisKategori'] ?? '').toString();
     return {
       'id_kategori': (row['id_kategori'] ?? row['idKategori'] ?? '').toString(),
-      'jenis_kategori': (row['jenis_kategori'] ?? row['jenisKategori'] ?? '')
-          .toString(),
+      'nama_kategori': name,
+      'jenis_kategori': name,
       'created_at': row['created_at'] ?? row['createdAt'],
       'updated_at': row['updated_at'] ?? row['updatedAt'],
     };

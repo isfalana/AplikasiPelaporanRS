@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
 import '../controllers/auth_controller.dart';
 import '../../../core/theme/app_colors.dart';
+// [MODIFIKASI] Import dialog reset/lupa kata sandi
+import '../../../global_widgets/password_requirement_widget.dart';
 
 // Palet khusus halaman login agar terasa lebih tenang dan premium tanpa
 // mengubah warna brand utama aplikasi.
@@ -311,7 +314,7 @@ class _PanelFooter extends StatelessWidget {
         SizedBox(width: 6),
         Expanded(
           child: Text(
-            'Akses internal · Data simulasi',
+            ' · Akses internal · ',
             style: TextStyle(color: Color(0x59FFFFFF), fontSize: 10),
           ),
         ),
@@ -362,84 +365,128 @@ class _LoginForm extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          'Masuk ke akun Anda',
-          style: TextStyle(
-            color: AppColors.textStrong,
-            fontSize: compact ? 22 : 25,
-            fontWeight: FontWeight.w700,
-            height: 1.2,
-            letterSpacing: -0.5,
-          ),
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'Gunakan akun RS Permata untuk melanjutkan ke ruang kerja.',
-          style: TextStyle(
-            color: AppColors.textWeak,
-            fontSize: 12.5,
-            height: 1.55,
-          ),
-        ),
-        SizedBox(height: compact ? 26 : 32),
-        const _FieldLabel('NIK'),
-        const SizedBox(height: 7),
-        TextField(
-          controller: controller.usernameController,
-          style: const TextStyle(
-            color: AppColors.textStrong,
-            fontSize: 14.5,
-            fontWeight: FontWeight.w500,
-          ),
-          cursorColor: AppColors.primary,
-          decoration: _inputDecoration(
-            hint: 'Masukkan NIK Anda',
-            icon: Icons.person_outline_rounded,
-          ),
-        ),
-        const SizedBox(height: 16),
-        const _FieldLabel('Kata sandi'),
-        const SizedBox(height: 7),
-        Obx(
-          () => TextField(
-            controller: controller.passwordController,
-            obscureText: controller.isPasswordHidden.value,
-            style: const TextStyle(
-              color: AppColors.textStrong,
-              fontSize: 14.5,
-              fontWeight: FontWeight.w500,
+    // [MODIFIKASI] CallbackShortcuts untuk memicu login saat menekan tombol Enter di keyboard
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.enter): () {
+          if (!controller.isLoading.value) {
+            controller.login();
+          }
+        },
+        const SingleActivator(LogicalKeyboardKey.numpadEnter): () {
+          if (!controller.isLoading.value) {
+            controller.login();
+          }
+        },
+      },
+      child: FocusScope(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Masuk ke akun Anda',
+              style: TextStyle(
+                color: AppColors.textStrong,
+                fontSize: compact ? 22 : 25,
+                fontWeight: FontWeight.w700,
+                height: 1.2,
+                letterSpacing: -0.5,
+              ),
             ),
-            cursorColor: AppColors.primary,
-            decoration: _inputDecoration(
-              hint: 'Masukkan kata sandi',
-              icon: Icons.lock_outline_rounded,
-              suffix: IconButton(
-                onPressed: controller.togglePasswordView,
-                splashRadius: 18,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints.tightFor(
-                  width: 42,
-                  height: 42,
+            const SizedBox(height: 8),
+            const Text(
+              'Gunakan akun RS Permata untuk melanjutkan ke ruang kerja.',
+              style: TextStyle(
+                color: AppColors.textWeak,
+                fontSize: 12.5,
+                height: 1.55,
+              ),
+            ),
+            SizedBox(height: compact ? 26 : 32),
+            const _FieldLabel('NIK'),
+            const SizedBox(height: 7),
+            // [MODIFIKASI] Input NIK dengan onSubmitted agar Enter berpindah ke password atau langsung login
+            TextField(
+              controller: controller.usernameController,
+              textInputAction: TextInputAction.next,
+              onSubmitted: (_) {
+                if (controller.passwordController.text.trim().isEmpty) {
+                  controller.passwordFocusNode.requestFocus();
+                } else {
+                  if (!controller.isLoading.value) {
+                    controller.login();
+                  }
+                }
+              },
+              style: const TextStyle(
+                color: AppColors.textStrong,
+                fontSize: 14.5,
+                fontWeight: FontWeight.w500,
+              ),
+              cursorColor: AppColors.primary,
+              decoration: _inputDecoration(
+                hint: 'Masukkan NIK Anda',
+                icon: Icons.person_outline_rounded,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const _FieldLabel('Kata sandi'),
+            const SizedBox(height: 7),
+            // [MODIFIKASI] Input Kata Sandi dengan FocusNode dan onSubmitted untuk memicu login via Enter
+            Obx(
+              () => TextField(
+                controller: controller.passwordController,
+                focusNode: controller.passwordFocusNode,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) {
+                  if (!controller.isLoading.value) {
+                    controller.login();
+                  }
+                },
+                obscureText: controller.isPasswordHidden.value,
+                style: const TextStyle(
+                  color: AppColors.textStrong,
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w500,
                 ),
-                icon: Icon(
-                  controller.isPasswordHidden.value
-                      ? Icons.visibility_off_outlined
-                      : Icons.visibility_outlined,
-                  color: AppColors.textWeak,
-                  size: 19,
+                cursorColor: AppColors.primary,
+                decoration: _inputDecoration(
+                  hint: 'Masukkan kata sandi',
+                  icon: Icons.lock_outline_rounded,
+                  suffix: IconButton(
+                    onPressed: controller.togglePasswordView,
+                    splashRadius: 18,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 42,
+                      height: 42,
+                    ),
+                    icon: Icon(
+                      controller.isPasswordHidden.value
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                      color: AppColors.textWeak,
+                      size: 19,
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-        ),
         Align(
           alignment: Alignment.centerRight,
           child: TextButton(
-            onPressed: () {},
+            // [MODIFIKASI] Membuka dialog Lupa Kata Sandi / Reset Password
+            onPressed: () async {
+              final initialNik = controller.usernameController.text.trim();
+              final success = await showResetPasswordDialog(
+                context,
+                initialNik: initialNik.isNotEmpty ? initialNik : null,
+              );
+              if (success == true) {
+                controller.passwordController.clear();
+              }
+            },
             style: TextButton.styleFrom(
               foregroundColor: AppColors.primary,
               padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
@@ -511,144 +558,146 @@ class _LoginForm extends StatelessWidget {
           ),
         ),
         SizedBox(height: compact ? 26 : 30),
-        _DemoAccounts(controller: controller),
+        // _DemoAccounts(controller: controller),
       ],
-    );
-  }
-}
-
-class _DemoAccounts extends StatelessWidget {
-  const _DemoAccounts({required this.controller});
-
-  final AuthController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final entries = AuthController.demoAccounts.entries.toList();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const Row(
-          children: [
-            Expanded(child: Divider(color: _fieldBorder, height: 1)),
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 10),
-              child: Text(
-                'atau akun demo',
-                style: TextStyle(
-                  color: AppColors.textWeak,
-                  fontSize: 10,
-                  letterSpacing: 0.1,
-                ),
-              ),
-            ),
-            Expanded(child: Divider(color: _fieldBorder, height: 1)),
-          ],
-        ),
-        const SizedBox(height: 4),
-        for (var index = 0; index < entries.length; index++) ...[
-          _DemoAccountRow(
-            nik: entries[index].key,
-            name: entries[index].value['name'] ?? entries[index].key,
-            password: entries[index].value['password'] ?? '',
-            onTap: () => controller.selectDemoAccount(entries[index].key),
-          ),
-          if (index != entries.length - 1)
-            const Divider(height: 1, color: _fieldBorder),
-        ],
-      ],
-    );
-  }
-}
-
-class _DemoAccountRow extends StatelessWidget {
-  const _DemoAccountRow({
-    required this.nik,
-    required this.name,
-    required this.password,
-    required this.onTap,
-  });
-
-  final String nik;
-  final String name;
-  final String password;
-  final VoidCallback onTap;
-
-  String get _initials {
-    final parts = name
-        .split(RegExp(r'\s+'))
-        .where((part) => part.isNotEmpty)
-        .take(2)
-        .map((part) => part.substring(0, 1).toUpperCase());
-    return parts.join();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
-        child: Row(
-          children: [
-            Container(
-              width: 30,
-              height: 30,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Text(
-                _initials,
-                style: const TextStyle(
-                  color: AppColors.primary,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppColors.textStrong,
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '$nik · sandi $password',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppColors.textWeak,
-                      fontSize: 10.5,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 6),
-            const Icon(
-              Icons.arrow_outward_rounded,
-              size: 14,
-              color: AppColors.textWeak,
-            ),
-          ],
         ),
       ),
     );
   }
 }
+
+// class _DemoAccounts extends StatelessWidget {
+//   const _DemoAccounts({required this.controller});
+
+//   final AuthController controller;
+
+//   @override
+//   Widget build(BuildContext context) {
+//     final entries = AuthController.demoAccounts.entries.toList();
+//     return Column(
+//       crossAxisAlignment: CrossAxisAlignment.stretch,
+//       children: [
+//         const Row(
+//           children: [
+//             Expanded(child: Divider(color: _fieldBorder, height: 1)),
+//             Padding(
+//               padding: EdgeInsets.symmetric(horizontal: 10),
+//               child: Text(
+//                 'atau akun demo',
+//                 style: TextStyle(
+//                   color: AppColors.textWeak,
+//                   fontSize: 10,
+//                   letterSpacing: 0.1,
+//                 ),
+//               ),
+//             ),
+//             Expanded(child: Divider(color: _fieldBorder, height: 1)),
+//           ],
+//         ),
+//         const SizedBox(height: 4),
+//         for (var index = 0; index < entries.length; index++) ...[
+//           _DemoAccountRow(
+//             nik: entries[index].key,
+//             name: entries[index].value['name'] ?? entries[index].key,
+//             password: entries[index].value['password'] ?? '',
+//             onTap: () => controller.selectDemoAccount(entries[index].key),
+//           ),
+//           if (index != entries.length - 1)
+//             const Divider(height: 1, color: _fieldBorder),
+//         ],
+//       ],
+//     );
+//   }
+// }
+
+// class _DemoAccountRow extends StatelessWidget {
+//   const _DemoAccountRow({
+//     required this.nik,
+//     required this.name,
+//     required this.password,
+//     required this.onTap,
+//   });
+
+//   final String nik;
+//   final String name;
+//   final String password;
+//   final VoidCallback onTap;
+
+//   String get _initials {
+//     final parts = name
+//         .split(RegExp(r'\s+'))
+//         .where((part) => part.isNotEmpty)
+//         .take(2)
+//         .map((part) => part.substring(0, 1).toUpperCase());
+//     return parts.join();
+//   }
+
+//   @override
+//   Widget build(BuildContext context) {
+//     return InkWell(
+//       onTap: onTap,
+//       borderRadius: BorderRadius.circular(10),
+//       child: Padding(
+//         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+//         child: Row(
+//           children: [
+//             Container(
+//               width: 30,
+//               height: 30,
+//               alignment: Alignment.center,
+//               decoration: BoxDecoration(
+//                 color: AppColors.primary.withValues(alpha: 0.1),
+//                 shape: BoxShape.circle,
+//               ),
+//               child: Text(
+//                 _initials,
+//                 style: const TextStyle(
+//                   color: AppColors.primary,
+//                   fontSize: 10,
+//                   fontWeight: FontWeight.w700,
+//                 ),
+//               ),
+//             ),
+//             const SizedBox(width: 10),
+//             Expanded(
+//               child: Column(
+//                 crossAxisAlignment: CrossAxisAlignment.start,
+//                 children: [
+//                   Text(
+//                     name,
+//                     maxLines: 1,
+//                     overflow: TextOverflow.ellipsis,
+//                     style: const TextStyle(
+//                       color: AppColors.textStrong,
+//                       fontSize: 12.5,
+//                       fontWeight: FontWeight.w600,
+//                     ),
+//                   ),
+//                   const SizedBox(height: 2),
+//                   Text(
+//                     '$nik · sandi $password',
+//                     maxLines: 1,
+//                     overflow: TextOverflow.ellipsis,
+//                     style: const TextStyle(
+//                       color: AppColors.textWeak,
+//                       fontSize: 10.5,
+//                     ),
+//                   ),
+//                 ],
+//               ),
+//             ),
+//             const SizedBox(width: 6),
+//             const Icon(
+//               Icons.arrow_outward_rounded,
+//               size: 14,
+//               color: AppColors.textWeak,
+//             ),
+//           ],
+//         ),
+//       ),
+//     );
+//   }
+// }
 
 class _FieldLabel extends StatelessWidget {
   const _FieldLabel(this.text);

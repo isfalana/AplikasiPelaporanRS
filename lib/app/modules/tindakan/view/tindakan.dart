@@ -87,7 +87,8 @@ class _TindakanContent extends GetView<TindakanController> {
       }
 
       final details = <(String, String)>[
-        ('ID laporan', _value(report, 'id_laporan')),
+        // [MODIFIKASI] Tampilkan nomor_laporan ringkas (lap01-tanggalbuat), fallback ke id_laporan
+        ('ID laporan', _reportValue(report, ['nomor_laporan', 'id_laporan'])),
         (
           'Tanggal laporan',
           _displayDate(
@@ -118,13 +119,8 @@ class _TindakanContent extends GetView<TindakanController> {
         ('Perihal', _value(report, 'perihal')),
         ('Pelapor', controller.reporterLabel(report)),
         ('Kategori', controller.kategoriLabel(report)),
-        (
-          'PIC',
-          [
-            _value(report, 'id_nik_pic', 'nik_pic'),
-            _value(report, 'id_unit_pic', 'unit_pic'),
-          ].where((value) => value != '-').join(' - '),
-        ),
+        // [MODIFIKASI] Tampilkan nama karyawan PIC berdasarkan NIK, bukan hanya kode NIK
+        ('PIC', controller.picLabel(report)),
         ('Prioritas', _value(report, 'prioritas')),
       ];
 
@@ -134,7 +130,11 @@ class _TindakanContent extends GetView<TindakanController> {
       final buktiBytes = report['bukti_bytes'] is Uint8List
           ? report['bukti_bytes'] as Uint8List
           : null;
-      final hasBukti = buktiName.isNotEmpty || buktiBytes != null;
+      // [MODIFIKASI] Ambil bukti_url dari report untuk pratinjau gambar bukti storage backend
+      final buktiUrl = report['bukti_url']?.toString().trim();
+      final hasBukti = (buktiName.isNotEmpty && buktiName != '-') ||
+          buktiBytes != null ||
+          (buktiUrl != null && buktiUrl.isNotEmpty);
       // Laporan Done bersifat final: seluruh kontrol tindak lanjut dikunci.
       final isLocked = controller.isReportDone(report);
 
@@ -186,7 +186,14 @@ class _TindakanContent extends GetView<TindakanController> {
                 ),
               ),
               const SizedBox(height: 6),
-              BuktiPreviewTile(fileName: buktiName, bytes: buktiBytes),
+              // [MODIFIKASI] Kirimkan imageUrl, idEvidence, dan idLaporan agar berkas bukti pelapor dari backend dapat ditampilkan & diunduh
+              BuktiPreviewTile(
+                fileName: buktiName,
+                bytes: buktiBytes,
+                imageUrl: buktiUrl,
+                idEvidence: report['id_evidence']?.toString(),
+                idLaporan: report['id_laporan']?.toString(),
+              ),
             ],
             if (isLocked) ...[
               const SizedBox(height: 12),
@@ -214,12 +221,99 @@ class _TindakanContent extends GetView<TindakanController> {
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Laporan ini sudah Done. Data tindak lanjut tidak '
-                        'dapat diubah lagi.',
+                        'Laporan ini sudah Done / disetujui oleh Pelapor. Data tindak lanjut tidak dapat diubah lagi.',
                         style: TextStyle(
                           fontSize: 12,
                           color: AppColors.textStrong,
                         ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (report['status']?.toString().toUpperCase() == 'PENDING_APPROVAL') ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.purple.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Colors.purple.withValues(alpha: 0.35),
+                  ),
+                ),
+                child: const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.rate_review_outlined,
+                      size: 18,
+                      color: Colors.purple,
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Seluruh checklist tindakan telah diselesaikan. Laporan sedang menunggu review dan persetujuan (approval) dari Pelapor.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textStrong,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (report['status']?.toString().toUpperCase() == 'RETURNED' ||
+                (report['approval_note'] != null &&
+                    report['approval_note'].toString().trim().isNotEmpty &&
+                    !isLocked)) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.redAccent.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Colors.redAccent.withValues(alpha: 0.35),
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.assignment_return_outlined,
+                      size: 18,
+                      color: Colors.redAccent,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Catatan Pelapor (Laporan Dikembalikan untuk Perbaikan):',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.redAccent,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            report['approval_note']?.toString() ??
+                                'Silakan periksa dan perbaiki tindakan.',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textStrong,
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -510,14 +604,23 @@ class _TindakanContent extends GetView<TindakanController> {
               ignoring: isLocked,
               child: Opacity(
                 opacity: isLocked ? 0.6 : 1,
-                child: ImageUploadField(
-                  label: 'Upload bukti tindak lanjut',
-                  fileName: controller.buktiTindakanName.value,
-                  bytes: controller.buktiTindakanBytes.value,
-                  onChanged: (name, bytes) {
-                    controller.buktiTindakanName.value = name;
-                    controller.buktiTindakanBytes.value = bytes;
-                  },
+                // [MODIFIKASI] Bungkus dengan Obx agar pratinjau bukti tindak lanjut reaktif terhadap URL backend dan file yang diunggah
+                child: Obx(
+                  () => ImageUploadField(
+                    label: 'Upload bukti tindak lanjut (Wajib)',
+                    fileName: controller.buktiTindakanName.value,
+                    bytes: controller.buktiTindakanBytes.value,
+                    imageUrl: controller.buktiTindakanUrl.value.isNotEmpty
+                        ? controller.buktiTindakanUrl.value
+                        : null,
+                    onChanged: (name, bytes) {
+                      controller.buktiTindakanName.value = name;
+                      controller.buktiTindakanBytes.value = bytes;
+                      if (bytes != null) {
+                        controller.buktiTindakanUrl.value = '';
+                      }
+                    },
+                  ),
                 ),
               ),
             ),
@@ -538,59 +641,43 @@ class _TindakanContent extends GetView<TindakanController> {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         const Text(
-                          'Status',
+                          'Status Laporan:',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
                           ),
                         ),
-                        Obx(
-                          () => DropdownButton<String>(
-                            value: controller.selectedStatus.value,
-                            items: [
-                              const DropdownMenuItem(
-                                value: 'Open',
-                                child: Text('Open'),
-                              ),
-                              const DropdownMenuItem(
-                                value: 'On Progress',
-                                child: Text('On Progress'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'Done',
-                                // Done hanya bisa dipilih setelah semua
-                                // tindakan dicentang selesai.
-                                enabled:
-                                    controller.allActionsComplete ||
-                                    controller.selectedStatus.value == 'Done',
-                                child: const Text('Done'),
-                              ),
-                            ],
-                            onChanged: isLocked
-                                ? null
-                                : (value) {
-                                    if (value != null) {
-                                      controller.selectedStatus.value = value;
-                                    }
-                                  },
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _statusColor(report['status']?.toString())
+                                .withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            _statusLabel(report['status']?.toString()),
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: _statusColor(report['status']?.toString()),
+                            ),
                           ),
                         ),
                       ],
                     ),
-                    if (!isLocked &&
-                        controller.actionItems.isNotEmpty &&
-                        !controller.allActionsComplete)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 6),
-                        child: Text(
-                          'Centang semua tindakan sebelum mengubah status '
-                          'menjadi Done.',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: AppColors.textWeak,
-                          ),
+                    const Padding(
+                      padding: EdgeInsets.only(top: 6),
+                      child: Text(
+                        'Status otomatis menjadi "Menunggu Approval" saat seluruh checklist selesai. Approval dilakukan oleh Pelapor.',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textWeak,
                         ),
                       ),
+                    ),
                   ],
                 ),
                 ElevatedButton(
@@ -598,7 +685,7 @@ class _TindakanContent extends GetView<TindakanController> {
                       ? _saveAction
                       : null,
                   style: AppButtons.primary,
-                  child: const Text('Kirim Tindakan'),
+                  child: const Text('Simpan & Sinkron'),
                 ),
               ],
             ),
@@ -608,15 +695,24 @@ class _TindakanContent extends GetView<TindakanController> {
     });
   }
 
-  void _addActionItem() {
-    final added = controller.addActionItem(
-      controller.actionInputController.text,
-    );
-    controller.actionInputController.clear();
-    if (!added) {
+  void _addActionItem() async {
+    final text = controller.actionInputController.text.trim();
+    if (text.isEmpty) {
       Get.snackbar(
         'Perhatian',
         'Isi tindak lanjut terlebih dahulu.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: AppColors.warning,
+        colorText: AppColors.white,
+        margin: const EdgeInsets.all(16),
+      );
+      return;
+    }
+    final added = await controller.addActionItem(text);
+    if (!added) {
+      Get.snackbar(
+        'Perhatian',
+        'Gagal menambah tindak lanjut.',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: AppColors.warning,
         colorText: AppColors.white,
@@ -626,8 +722,8 @@ class _TindakanContent extends GetView<TindakanController> {
   }
 
   /// Terapkan template terpilih ke daftar tindak lanjut.
-  void _applyTemplate() {
-    final error = controller.applyTemplateById(
+  void _applyTemplate() async {
+    final error = await controller.applyTemplateById(
       controller.selectedTemplateId.value,
     );
     if (error == null) {
@@ -636,7 +732,7 @@ class _TindakanContent extends GetView<TindakanController> {
         'Berhasil',
         'Langkah dari template ditambahkan ke daftar tindak lanjut.',
         snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: AppColors.primary,
+        backgroundColor: AppColors.success,
         colorText: AppColors.white,
         margin: const EdgeInsets.all(16),
       );
@@ -658,13 +754,13 @@ class _TindakanContent extends GetView<TindakanController> {
     return template['id_template']?.toString() ?? '-';
   }
 
-  void _saveAction() {
-    final error = controller.saveAction();
+  void _saveAction() async {
+    final error = await controller.saveAction();
     Get.snackbar(
       error == null ? 'Berhasil' : 'Perhatian',
       error ?? 'Tindak lanjut berhasil disimpan.',
       snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: error == null ? AppColors.primary : AppColors.warning,
+      backgroundColor: error == null ? AppColors.success : AppColors.warning,
       colorText: AppColors.white,
       margin: const EdgeInsets.all(16),
     );
@@ -743,6 +839,8 @@ class _ReportList extends GetView<TindakanController> {
                     child: _ReportCard(
                       report: report,
                       reporter: controller.reporterLabel(report),
+                      pic: controller.picLabel(report),
+                      lastUpdatedBy: controller.lastUpdateByDisplay(report),
                       kategori: controller.kategoriLabel(report),
                       onTap: () => controller.selectReport(report),
                     ),
@@ -760,12 +858,16 @@ class _ReportCard extends StatelessWidget {
   const _ReportCard({
     required this.report,
     required this.reporter,
+    required this.pic,
+    required this.lastUpdatedBy,
     required this.kategori,
     required this.onTap,
   });
 
   final Map<String, dynamic> report;
   final String reporter;
+  final String pic;
+  final String lastUpdatedBy;
   final String kategori;
   final VoidCallback onTap;
 
@@ -785,15 +887,10 @@ class _ReportCard extends StatelessWidget {
     final deadline = _displayDate(
       _reportValue(report, ['deadline', 'tgl_deadline', 'tanggal_deadline']),
     );
-    final lastUpdatedBy =
-        report['last_update_by']?.toString() ??
-        report['lastUpdateBy']?.toString() ??
-        report['update_by']?.toString() ??
-        report['updateBy']?.toString() ??
-        '-';
 
     return ReportStyleCard(
-      reportId: report['id_laporan']?.toString() ?? '-',
+      // [MODIFIKASI] Tampilkan nomor_laporan ringkas (lap01-tanggalbuat), fallback ke id_laporan
+      reportId: (report['nomor_laporan'] ?? report['id_laporan'])?.toString() ?? '-',
       title: report['perihal']?.toString() ?? '-',
       status: status,
       onTap: onTap,
@@ -806,12 +903,26 @@ class _ReportCard extends StatelessWidget {
             label: priority,
             color: priorityColor,
           ),
-        // Tanda bahwa laporan sudah Done dan sudah divalidasi oleh pelapor.
-        if (status == 'Done' && report['validasi_pelapor'] == true)
+        if (status == 'Done')
           const ReportMetaChip(
             icon: Icons.verified_outlined,
-            label: 'Tervalidasi pelapor',
+            label: 'Laporan Selesai & Disetujui',
             color: AppColors.success,
+          ),
+        if (status == 'Menunggu Approval')
+          const ReportMetaChip(
+            icon: Icons.rate_review_outlined,
+            label: 'Menunggu Approval Pelapor',
+            color: Colors.purple,
+          ),
+        if (status == 'Dikembalikan')
+          ReportMetaChip(
+            icon: Icons.assignment_return_outlined,
+            label: report['approval_note'] != null &&
+                    report['approval_note'].toString().trim().isNotEmpty
+                ? 'Dikembalikan: ${report['approval_note']}'
+                : 'Dikembalikan untuk Perbaikan',
+            color: Colors.redAccent,
           ),
       ],
       infoItems: [
@@ -825,17 +936,29 @@ class _ReportCard extends StatelessWidget {
           label: 'Deadline',
           value: deadline.isEmpty ? '-' : deadline,
         ),
+        // [MODIFIKASI] Tampilkan Last update by pada info card (sama persis dengan daftar laporan)
+        ReportInfoItem(
+          icon: Icons.history_outlined,
+          label: 'Last update by',
+          value: lastUpdatedBy,
+        ),
+        if (status == 'Done' || status == 'Menunggu Approval' || status == 'Dikembalikan')
+          ReportInfoItem(
+            icon: Icons.how_to_reg_outlined,
+            label: 'Status Approval',
+            value: status,
+          ),
       ],
       people: [
         ReportPersonRow(
-          icon: Icons.person_outline,
+          icon: Icons.account_circle_outlined,
           label: 'Pelapor',
           value: reporter,
         ),
         ReportPersonRow(
-          icon: Icons.history_outlined,
-          label: 'Last update by',
-          value: lastUpdatedBy,
+          icon: Icons.assignment_ind_outlined,
+          label: 'PIC',
+          value: pic,
         ),
       ],
     );
@@ -889,25 +1012,27 @@ String _reportValue(Map<String, dynamic> report, List<String> keys) {
   return '-';
 }
 
-/// Tampilkan tanggal sebagai `dd/MM/yyyy` bila bisa diparse.
+/// [MODIFIKASI] Tampilkan tanggal sebagai `DD-MM-YYYY` bila bisa diparse.
 String _displayDate(String value) {
   final text = value.trim();
   if (text.isEmpty || text == '-') return '-';
 
   final iso = DateTime.tryParse(text);
   if (iso != null) {
-    return '${iso.day.toString().padLeft(2, '0')}/'
-        '${iso.month.toString().padLeft(2, '0')}/${iso.year}';
+    return '${iso.day.toString().padLeft(2, '0')}-'
+        '${iso.month.toString().padLeft(2, '0')}-${iso.year}';
   }
 
-  final parts = text.split('/');
+  final clean = text.replaceAll('/', '-');
+  final parts = clean.split('-');
   if (parts.length != 3) return text;
-  final day = int.tryParse(parts[0]);
-  final month = int.tryParse(parts[1]);
-  final year = int.tryParse(parts[2]);
-  if (day == null || month == null || year == null) return text;
-  return '${day.toString().padLeft(2, '0')}/'
-      '${month.toString().padLeft(2, '0')}/$year';
+  if (parts[0].length == 4) {
+    return '${parts[2].padLeft(2, '0')}-${parts[1].padLeft(2, '0')}-${parts[0]}';
+  }
+  if (parts[2].length == 4) {
+    return '${parts[0].padLeft(2, '0')}-${parts[1].padLeft(2, '0')}-${parts[2]}';
+  }
+  return text;
 }
 
 InputDecoration _inputDecoration({required String hint}) {
@@ -943,9 +1068,21 @@ BoxDecoration _decoration() {
 }
 
 String _statusLabel(String? status) {
-  return switch (status?.trim().toLowerCase()) {
-    'done' || 'selesai' => 'Done',
-    'on progress' || 'on progres' || 'proses' || 'in progress' => 'On Progress',
+  return switch (status?.trim().toUpperCase()) {
+    'COMPLETED' || 'DONE' || 'SELESAI' => 'Done',
+    'PENDING_APPROVAL' || 'PENDING APPROVAL' => 'Menunggu Approval',
+    'RETURNED' || 'DIKEMBALIKAN' => 'Dikembalikan',
+    'IN_PROGRESS' || 'ON PROGRESS' || 'PROSES' => 'On Progress',
     _ => 'Open',
+  };
+}
+
+Color _statusColor(String? status) {
+  return switch (_statusLabel(status)) {
+    'Done' => AppColors.success,
+    'Menunggu Approval' => Colors.purple,
+    'Dikembalikan' => Colors.redAccent,
+    'On Progress' => AppColors.info,
+    _ => AppColors.warning,
   };
 }

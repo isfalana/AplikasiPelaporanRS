@@ -32,6 +32,7 @@ List<FilterMenuEntry> reportFilterEntries({bool includeDone = true}) {
 
 /// Cek apakah satu laporan cocok dengan nilai filter aktif.
 /// Nilai filter: `'all'`, `'p:<prioritas>'`, atau `'s:<status>'`.
+/// [MODIFIKASI] Cek apakah satu laporan cocok dengan nilai filter aktif (mendukung prioritas, status, dan pencarian q:).
 bool matchesReportFilter(Map<String, dynamic> report, String filter) {
   if (filter == 'all') return true;
   if (filter.startsWith('p:')) {
@@ -42,24 +43,31 @@ bool matchesReportFilter(Map<String, dynamic> report, String filter) {
     return _normalizeStatus(report['status']?.toString()) ==
         filter.substring(2);
   }
+  if (filter.startsWith('q:')) {
+    final query = filter.substring(2).trim().toLowerCase();
+    if (query.isEmpty) return true;
+    final perihal = (report['perihal'] ?? report['title'])?.toString().toLowerCase() ?? '';
+    final nomor = (report['nomor_laporan'] ?? report['id_laporan'])?.toString().toLowerCase() ?? '';
+    return perihal.contains(query) || nomor.contains(query);
+  }
   return true;
 }
 
-/// Cek apakah satu laporan cocok dengan beberapa filter sekaligus.
-///
-/// Filter prioritas dan status digabung dengan logika AND antar kelompok,
-/// sedangkan pilihan di dalam kelompok yang sama memakai logika OR.
-/// Himpunan kosong berarti semua laporan lolos.
+/// [MODIFIKASI] Cek apakah satu laporan cocok dengan beberapa filter sekaligus.
+/// Termasuk pencarian teks berdasarkan perihal atau nomor laporan (prefix 'q:').
 bool matchesReportFilters(Map<String, dynamic> report, Set<String> filters) {
   if (filters.isEmpty) return true;
 
   final priorities = <String>{};
   final statuses = <String>{};
+  String? searchQuery;
   for (final filter in filters) {
     if (filter.startsWith('p:')) {
       priorities.add(filter.substring(2));
     } else if (filter.startsWith('s:')) {
       statuses.add(filter.substring(2));
+    } else if (filter.startsWith('q:')) {
+      searchQuery = filter.substring(2).trim().toLowerCase();
     }
   }
 
@@ -67,7 +75,15 @@ bool matchesReportFilters(Map<String, dynamic> report, Set<String> filters) {
   final status = _normalizeStatus(report['status']?.toString());
   final priorityMatch = priorities.isEmpty || priorities.contains(priority);
   final statusMatch = statuses.isEmpty || statuses.contains(status);
-  return priorityMatch && statusMatch;
+
+  bool queryMatch = true;
+  if (searchQuery != null && searchQuery.isNotEmpty) {
+    final perihal = (report['perihal'] ?? report['title'])?.toString().toLowerCase() ?? '';
+    final nomor = (report['nomor_laporan'] ?? report['id_laporan'])?.toString().toLowerCase() ?? '';
+    queryMatch = perihal.contains(searchQuery) || nomor.contains(searchQuery);
+  }
+
+  return priorityMatch && statusMatch && queryMatch;
 }
 
 String _normalizePriority(String? value) {
@@ -268,12 +284,22 @@ class MultiFilterMenuButton extends StatelessWidget {
   String get _activeLabel {
     if (selectedValues.isEmpty) return 'Semua';
     final labels = <String>[];
+    String? searchQuery;
     for (final entry in entries) {
       if (!selectedValues.contains(entry.value)) continue;
       final parts = entry.label.split(':');
       labels.add(
         parts.length > 1 ? parts.sublist(1).join(':').trim() : entry.label,
       );
+    }
+    for (final val in selectedValues) {
+      if (val.startsWith('q:')) {
+        final q = val.substring(2).trim();
+        if (q.isNotEmpty) searchQuery = q;
+      }
+    }
+    if (searchQuery != null) {
+      labels.insert(0, '"$searchQuery"');
     }
     if (labels.isEmpty) return 'Semua';
     if (labels.length <= 2) return labels.join(' · ');
@@ -385,11 +411,35 @@ class _MultiFilterSheet extends StatefulWidget {
 
 class _MultiFilterSheetState extends State<_MultiFilterSheet> {
   late final Set<String> _selected;
+  late final TextEditingController _searchController;
 
   @override
   void initState() {
     super.initState();
     _selected = {...widget.initialValues};
+    String initialQuery = '';
+    for (final v in _selected) {
+      if (v.startsWith('q:')) {
+        initialQuery = v.substring(2);
+        break;
+      }
+    }
+    _searchController = TextEditingController(text: initialQuery);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _applyFilters() {
+    _selected.removeWhere((e) => e.startsWith('q:'));
+    final q = _searchController.text.trim();
+    if (q.isNotEmpty) {
+      _selected.add('q:$q');
+    }
+    Navigator.of(context).pop({..._selected});
   }
 
   @override
@@ -464,11 +514,66 @@ class _MultiFilterSheetState extends State<_MultiFilterSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // [MODIFIKASI] Kolom pencarian perihal atau nomor laporan pada pop-up filter
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      child: TextField(
+                        controller: _searchController,
+                        style: const TextStyle(fontSize: 13, color: AppColors.textStrong),
+                        decoration: InputDecoration(
+                          hintText: 'Cari judul/perihal atau nomor laporan...',
+                          hintStyle: const TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textWeak,
+                          ),
+                          prefixIcon: const Icon(
+                            Icons.search_rounded,
+                            size: 20,
+                            color: AppColors.primary,
+                          ),
+                          suffixIcon: _searchController.text.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear_rounded, size: 18),
+                                  onPressed: () {
+                                    setState(() {
+                                      _searchController.clear();
+                                    });
+                                  },
+                                )
+                              : null,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          filled: true,
+                          fillColor: AppColors.surface,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: AppColors.border),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: AppColors.border),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(
+                              color: AppColors.primary,
+                              width: 1.5,
+                            ),
+                          ),
+                        ),
+                        onChanged: (_) => setState(() {}),
+                        onSubmitted: (_) => _applyFilters(),
+                      ),
+                    ),
                     if (allEntry != null) ...[
                       _FilterChip(
                         label: allEntry.label,
-                        selected: _selected.isEmpty,
-                        onTap: () => setState(_selected.clear),
+                        selected: _selected.where((e) => !e.startsWith('q:')).isEmpty,
+                        onTap: () => setState(() {
+                          _selected.removeWhere((e) => !e.startsWith('q:'));
+                        }),
                       ),
                       const SizedBox(height: 20),
                     ],
@@ -514,7 +619,10 @@ class _MultiFilterSheetState extends State<_MultiFilterSheet> {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () => setState(_selected.clear),
+                      onPressed: () => setState(() {
+                        _selected.clear();
+                        _searchController.clear();
+                      }),
                       style: AppButtons.outlined,
                       child: const Text('Reset'),
                     ),
@@ -522,8 +630,7 @@ class _MultiFilterSheetState extends State<_MultiFilterSheet> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () =>
-                          Navigator.of(context).pop({..._selected}),
+                      onPressed: _applyFilters,
                       style: AppButtons.primary,
                       child: const Text('Terapkan'),
                     ),

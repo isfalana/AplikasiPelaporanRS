@@ -15,14 +15,14 @@ class DashboardView extends GetView<DashboardController> {
   Widget build(BuildContext context) {
     return MainLayoutWidget(
       title: 'Dashboard',
-      desktopActions: [
-        IconButton(
-          tooltip: 'Muat ulang data',
-          onPressed: controller.fetchDashboardData,
-          icon: const Icon(Icons.refresh_rounded, color: AppColors.textWeak),
-        ),
-        const SizedBox(width: 8),
-      ],
+      // desktopActions: [
+      //   IconButton(
+      //     tooltip: 'Muat ulang data',
+      //     onPressed: controller.fetchDashboardData,
+      //     icon: const Icon(Icons.refresh_rounded, color: AppColors.textWeak),
+      //   ),
+      //   const SizedBox(width: 8),
+      // ],
       child: _buildContent(),
     );
   }
@@ -308,15 +308,11 @@ class DashboardView extends GetView<DashboardController> {
         ? '-'
         : controller.laporanController.kategoriName(kategoriRaw);
     final deadline = laporan['deadline']?.toString().trim();
-    final lastUpdatedBy =
-        laporan['last_update_by']?.toString() ??
-        laporan['lastUpdateBy']?.toString() ??
-        laporan['update_by']?.toString() ??
-        laporan['updateBy']?.toString() ??
-        '-';
+    final lastUpdatedBy = controller.lastUpdatedBy(laporan);
 
     return ReportStyleCard(
-      reportId: laporan['id_laporan']?.toString() ?? 'Laporan',
+      // [MODIFIKASI] Tampilkan nomor_laporan ringkas (lap01-tanggalbuat), fallback ke id_laporan
+      reportId: (laporan['nomor_laporan'] ?? laporan['id_laporan'])?.toString() ?? 'Laporan',
       title: laporan['perihal']?.toString() ?? 'Tanpa perihal',
       status: status,
       metaChips: [
@@ -337,7 +333,8 @@ class DashboardView extends GetView<DashboardController> {
         ReportInfoItem(
           icon: Icons.event_outlined,
           label: 'Deadline',
-          value: deadline == null || deadline.isEmpty ? '-' : deadline,
+          // [MODIFIKASI] Format deadline menjadi DD-MM-YYYY
+          value: controller.formatDisplayDate(deadline),
         ),
         ReportInfoItem(
           icon: Icons.history_outlined,

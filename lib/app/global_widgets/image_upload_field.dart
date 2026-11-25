@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +7,8 @@ import 'package:image_picker/image_picker.dart';
 
 import '../core/theme/app_colors.dart';
 import 'bukti_preview.dart';
+import 'camera/web_camera_helper.dart';
+import 'compression/file_compress_helper.dart';
 
 /// Field upload bukti dengan pratinjau lokal.
 ///
@@ -19,9 +22,15 @@ class ImageUploadField extends StatelessWidget {
     required this.fileName,
     required this.bytes,
     required this.onChanged,
+    this.imageUrl,
+    this.idEvidence,
     this.label = 'Upload bukti',
-    this.hint = 'Gambar (JPG, PNG, WEBP) atau dokumen (PDF, DOC, XLS)',
+    this.hint = 'Gambar (JPG, PNG, WEBP) atau dokumen (PDF, DOC, XLS) · Maks. 5 MB',
   });
+
+  /// [MODIFIKASI] Batas maksimal ukuran file (5 MB) untuk mencegah kelebihan beban server
+  static const int maxFileSizeBytes = 5 * 1024 * 1024;
+  static const String maxFileSizeText = '5 MB';
 
   /// Nama file yang sedang terpilih.
   final String fileName;
@@ -29,13 +38,17 @@ class ImageUploadField extends StatelessWidget {
   /// Isi file untuk pratinjau. Bisa null bila hanya nama file yang tersimpan.
   final Uint8List? bytes;
 
+  // [MODIFIKASI] URL gambar tersimpan di backend (jika ada)
+  final String? imageUrl;
+  final String? idEvidence;
+
   /// Dipanggil setelah file dipilih atau dihapus.
   final void Function(String fileName, Uint8List? bytes) onChanged;
 
   final String label;
   final String hint;
 
-  bool get _hasFile => bytes != null || fileName.trim().isNotEmpty;
+  bool get _hasFile => bytes != null || fileName.trim().isNotEmpty || (imageUrl != null && imageUrl!.trim().isNotEmpty);
 
   bool get _supportsCamera {
     if (kIsWeb) return true;
@@ -167,7 +180,13 @@ class ImageUploadField extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: BuktiPreviewTile(fileName: fileName, bytes: bytes),
+                // [MODIFIKASI] Teruskan imageUrl dan idEvidence ke BuktiPreviewTile agar file dari server dapat ditampilkan & diunduh
+                child: BuktiPreviewTile(
+                  fileName: fileName,
+                  bytes: bytes,
+                  imageUrl: imageUrl,
+                  idEvidence: idEvidence,
+                ),
               ),
               const SizedBox(width: 6),
               IconButton(
@@ -193,9 +212,12 @@ class ImageUploadField extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 6),
-          const Text(
-            'Pratinjau lokal - belum diunggah ke server.',
-            style: TextStyle(fontSize: 10.5, color: AppColors.textWeak),
+          // [MODIFIKASI] Berikan keterangan yang tepat bila file sudah tersimpan di server atau baru dipilih lokal
+          Text(
+            (imageUrl != null && imageUrl!.trim().isNotEmpty && (bytes == null || bytes!.isEmpty))
+                ? 'File tersimpan di server · Siap dilihat & diunduh'
+                : 'Pratinjau lokal · ${buktiFileSize(bytes)} (Maks. $maxFileSizeText) - klik Simpan untuk mengunggah.',
+            style: const TextStyle(fontSize: 10.5, color: AppColors.textWeak),
           ),
         ],
       ),
@@ -331,11 +353,50 @@ class ImageUploadField extends StatelessWidget {
         );
         return;
       }
-      final name = file.name.trim().isEmpty
-          ? 'bukti_${DateTime.now().millisecondsSinceEpoch}.'
-                '${file.extension ?? 'file'}'
+
+      var chosenName = file.name.trim().isEmpty
+          ? 'bukti_${DateTime.now().millisecondsSinceEpoch}.${file.extension ?? 'file'}'
           : file.name;
-      onChanged(name, data);
+      var chosenBytes = data;
+
+      // [MODIFIKASI] Kompresi otomatis untuk gambar atau foto dokumen yang diunggah
+      if (FileCompressHelper.isImageFile(chosenName)) {
+        final compressed = await FileCompressHelper.compressIfImage(
+          fileName: chosenName,
+          bytes: chosenBytes,
+        );
+        if (compressed.wasCompressed) {
+          chosenName = compressed.fileName;
+          chosenBytes = compressed.bytes;
+          Get.snackbar(
+            'Kompresi Otomatis Berhasil',
+            'Ukuran file berhasil dioptimalkan dari ${compressed.formattedOriginalSize} menjadi ${compressed.formattedCompressedSize} (hemat ${compressed.savingsPercentage}%).',
+            snackPosition: SnackPosition.BOTTOM,
+            backgroundColor: const Color(0xFF10B981),
+            colorText: Colors.white,
+            margin: const EdgeInsets.all(16),
+            icon: const Icon(Icons.compress_rounded, color: Colors.white),
+            duration: const Duration(seconds: 4),
+          );
+        }
+      }
+
+      // Validasi batas ukuran file dokumen (maks. 5 MB) setelah kompresi
+      if (chosenBytes.lengthInBytes > maxFileSizeBytes) {
+        Get.snackbar(
+          'Ukuran File Terlalu Besar',
+          'Dokumen "$chosenName" berukuran ${buktiFileSize(chosenBytes)}, melebihi batas maksimal $maxFileSizeText. Silakan sesuaikan atau pilih dokumen lain.',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: AppColors.error,
+          colorText: AppColors.white,
+          margin: const EdgeInsets.all(16),
+          icon: const Icon(Icons.warning_amber_rounded, color: AppColors.white),
+          duration: const Duration(seconds: 4),
+        );
+        return;
+      }
+
+      onChanged(chosenName, chosenBytes);
     } catch (_) {
       Get.snackbar(
         'Tidak dapat membuka file',
@@ -351,16 +412,93 @@ class ImageUploadField extends StatelessWidget {
 
   Future<void> _pickImage(ImageSource source) async {
     try {
+      // [MODIFIKASI] Buka kamera perangkat langsung via live viewfinder WebRTC jika di platform Web
+      if (kIsWeb && source == ImageSource.camera) {
+        final camResult = await WebCameraHelper.openCamera();
+        if (camResult == null) return;
+        var name = camResult['name']?.toString() ??
+            'foto_kamera_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final dataUrl = camResult['dataUrl']?.toString() ?? '';
+        if (dataUrl.isEmpty) return;
+        final base64Str =
+            dataUrl.contains(',') ? dataUrl.split(',').last : dataUrl;
+        var data = base64Decode(base64Str);
+
+        // [MODIFIKASI] Kompresi otomatis hasil kamera
+        final compressed = await FileCompressHelper.compressIfImage(
+          fileName: name,
+          bytes: data,
+        );
+        if (compressed.wasCompressed) {
+          name = compressed.fileName;
+          data = compressed.bytes;
+        }
+
+        // Validasi batas ukuran file foto (maks. 5 MB) sebelum diproses
+        if (data.lengthInBytes > maxFileSizeBytes) {
+          Get.snackbar(
+            'Ukuran Foto Terlalu Besar',
+            'Foto berukuran ${buktiFileSize(data)}, melebihi batas maksimal $maxFileSizeText. Silakan sesuaikan atau kompres foto sebelum diunggah.',
+            snackPosition: SnackPosition.BOTTOM,
+            backgroundColor: AppColors.error,
+            colorText: AppColors.white,
+            margin: const EdgeInsets.all(16),
+            icon: const Icon(Icons.warning_amber_rounded, color: AppColors.white),
+            duration: const Duration(seconds: 4),
+          );
+          return;
+        }
+
+        onChanged(name, data);
+        return;
+      }
+
       final picked = await ImagePicker().pickImage(
         source: source,
         imageQuality: 85,
         maxWidth: 1600,
       );
       if (picked == null) return;
-      final data = await picked.readAsBytes();
-      final name = picked.name.trim().isEmpty
+      var data = await picked.readAsBytes();
+      var name = picked.name.trim().isEmpty
           ? 'bukti_${DateTime.now().millisecondsSinceEpoch}.jpg'
           : picked.name;
+
+      // [MODIFIKASI] Kompresi otomatis untuk foto galeri
+      final compressed = await FileCompressHelper.compressIfImage(
+        fileName: name,
+        bytes: data,
+      );
+      if (compressed.wasCompressed) {
+        name = compressed.fileName;
+        data = compressed.bytes;
+        Get.snackbar(
+          'Kompresi Otomatis Berhasil',
+          'Ukuran foto berhasil dioptimalkan dari ${compressed.formattedOriginalSize} menjadi ${compressed.formattedCompressedSize} (hemat ${compressed.savingsPercentage}%).',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: const Color(0xFF10B981),
+          colorText: Colors.white,
+          margin: const EdgeInsets.all(16),
+          icon: const Icon(Icons.compress_rounded, color: Colors.white),
+          duration: const Duration(seconds: 4),
+        );
+      }
+
+      // Validasi batas ukuran file foto (maks. 5 MB) sebelum diproses
+      if (data.lengthInBytes > maxFileSizeBytes) {
+        Get.snackbar(
+          'Ukuran Foto Terlalu Besar',
+          'Foto "$name" berukuran ${buktiFileSize(data)}, melebihi batas maksimal $maxFileSizeText. Silakan sesuaikan atau kompres foto sebelum diunggah.',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: AppColors.error,
+          colorText: AppColors.white,
+          margin: const EdgeInsets.all(16),
+          icon: const Icon(Icons.warning_amber_rounded, color: AppColors.white),
+          duration: const Duration(seconds: 4),
+        );
+        return;
+      }
+
       onChanged(name, data);
     } catch (_) {
       Get.snackbar(
