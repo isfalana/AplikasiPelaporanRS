@@ -176,8 +176,7 @@ class _MasterKategoriContentState extends State<_MasterKategoriContent> {
           const SizedBox(width: 10),
           const Expanded(
             child: Text(
-              'Server belum terhubung. Data contoh ditampilkan agar halaman '
-              'tetap bisa dipakai.',
+              'Server belum terhubung. Data yang ditampilkan adalah data contoh',
               style: TextStyle(fontSize: 12, color: AppColors.textStrong),
             ),
           ),
@@ -420,18 +419,21 @@ class _MasterKategoriContentState extends State<_MasterKategoriContent> {
   }
 
   Future<void> _openForm([Map<String, dynamic>? kategori]) async {
+    final nextId = kategori == null ? await controller.fetchNextId() : null;
+    if (!mounted) return;
     final result = await showDialog<Map<String, String>>(
       context: context,
       barrierDismissible: false,
       builder: (context) => _KategoriFormDialog(
         kategori: kategori,
-        generatedId: kategori == null ? controller.generateKategoriId() : null,
+        generatedId: nextId,
       ),
     );
     if (result == null) return;
 
     final error = await controller.saveKategori(
       originalId: kategori?['id_kategori']?.toString(),
+      customId: nextId,
       jenisKategori: result['jenis_kategori'] ?? '',
     );
     if (!mounted) return;

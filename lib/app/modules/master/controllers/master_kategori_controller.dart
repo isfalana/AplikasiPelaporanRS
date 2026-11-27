@@ -40,8 +40,22 @@ class MasterKategoriController extends GetxController {
     }).toList();
   }
 
-  /// [MODIFIKASI] Buat ID kategori baru yang melanjutkan nomor tertinggi (MAX + 1)
-  /// agar data kategori yang sudah di-soft-delete tidak tertimpa dan tetap berfungsi sebagai riwayat (audit trail).
+  /// [MODIFIKASI] Ambil ID kategori berikutnya langsung dari database (termasuk soft-delete)
+  Future<String> fetchNextId() async {
+    try {
+      final dio = await ApiService.getClient();
+      final response = await dio.get('/master/next-id/kategori');
+      if (response.statusCode == 200 && response.data != null) {
+        final nextId = response.data['data']?['next_id']?.toString();
+        if (nextId != null && nextId.isNotEmpty) {
+          return nextId;
+        }
+      }
+    } catch (_) {}
+    return generateKategoriId();
+  }
+
+  /// [MODIFIKASI] Buat ID kategori baru 2 digit (KAT-01) sebagai fallback
   String generateKategoriId() {
     var maxNumber = 0;
     for (final kategori in listKategori) {
@@ -80,6 +94,7 @@ class MasterKategoriController extends GetxController {
   /// Mengembalikan pesan error, atau null bila berhasil.
   Future<String?> saveKategori({
     String? originalId,
+    String? customId,
     required String jenisKategori,
   }) async {
     final jenis = jenisKategori.trim();
@@ -87,7 +102,7 @@ class MasterKategoriController extends GetxController {
     if (jenis.length > 100) return 'Jenis kategori maksimal 100 karakter.';
 
     final isCreate = originalId == null;
-    final id = isCreate ? generateKategoriId() : originalId.trim();
+    final id = isCreate ? (customId ?? await fetchNextId()) : originalId.trim();
     if (id.isEmpty) return 'ID kategori tidak valid.';
 
     final now = DateTime.now().toIso8601String();
@@ -174,12 +189,30 @@ class MasterKategoriController extends GetxController {
     _sort();
   }
 
+  // [MODIFIKASI] Pengurutan tabel master kategori berdasarkan id_kategori secara natural
   void _sort() {
     listKategori.sort((first, second) {
-      final firstName = first['jenis_kategori']?.toString().toLowerCase() ?? '';
-      final secondName =
-          second['jenis_kategori']?.toString().toLowerCase() ?? '';
-      return firstName.compareTo(secondName);
+      final firstId = (first['id_kategori'] ?? first['idKategori'] ?? '').toString().trim();
+      final secondId = (second['id_kategori'] ?? second['idKategori'] ?? '').toString().trim();
+      if (firstId.isEmpty && secondId.isEmpty) return 0;
+      if (firstId.isEmpty) return 1;
+      if (secondId.isEmpty) return -1;
+
+      final numA = int.tryParse(firstId);
+      final numB = int.tryParse(secondId);
+      if (numA != null && numB != null) return numA.compareTo(numB);
+
+      final reg = RegExp(r'^(\D*)(\d+)$');
+      final matchA = reg.firstMatch(firstId);
+      final matchB = reg.firstMatch(secondId);
+      if (matchA != null && matchB != null && matchA.group(1)?.toLowerCase() == matchB.group(1)?.toLowerCase()) {
+        final nA = int.tryParse(matchA.group(2)!) ?? 0;
+        final nB = int.tryParse(matchB.group(2)!) ?? 0;
+        final comp = nA.compareTo(nB);
+        if (comp != 0) return comp;
+      }
+
+      return firstId.toLowerCase().compareTo(secondId.toLowerCase());
     });
     listKategori.refresh();
   }
@@ -220,7 +253,13 @@ class MasterKategoriController extends GetxController {
     if (data is Map) {
       final message = data['message'] ?? data['error'];
       if (message != null && message.toString().trim().isNotEmpty) {
-        return message.toString();
+        final msgStr = message.toString();
+        if (msgStr.contains('notNull Violation')) {
+          final lower = msgStr.toLowerCase();
+          if (lower.contains('kategori') || lower.contains('nama')) return 'Jenis kategori tidak boleh kosong.';
+          return 'Data yang wajib diisi tidak boleh kosong.';
+        }
+        return msgStr;
       }
     }
     return switch (error.type) {

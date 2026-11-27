@@ -475,6 +475,7 @@ class _NotificationPanel extends StatelessWidget {
 
     switch (type) {
       case 'NEW_LAPORAN':
+      case 'LAPORAN_BARU':
         icon = Icons.post_add_rounded;
         iconColor = const Color(0xFF2563EB);
         bgColor = const Color(0xFFEFF6FF);

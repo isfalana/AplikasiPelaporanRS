@@ -42,8 +42,22 @@ class MasterRoleController extends GetxController {
     }).toList();
   }
 
-  /// [MODIFIKASI] Buat ID role baru yang melanjutkan nomor tertinggi (MAX + 1)
-  /// agar data role yang sudah di-soft-delete tidak tertimpa dan tetap berfungsi sebagai riwayat (audit trail).
+  /// [MODIFIKASI] Ambil ID role berikutnya langsung dari database (termasuk soft-delete)
+  Future<String> fetchNextId() async {
+    try {
+      final dio = await ApiService.getClient();
+      final response = await dio.get('/master/next-id/role');
+      if (response.statusCode == 200 && response.data != null) {
+        final nextId = response.data['data']?['next_id']?.toString();
+        if (nextId != null && nextId.isNotEmpty) {
+          return nextId;
+        }
+      }
+    } catch (_) {}
+    return generateRoleId();
+  }
+
+  /// [MODIFIKASI] Buat ID role baru 2 digit (ROLE-01) sebagai fallback
   String generateRoleId() {
     var maxNumber = 0;
     for (final role in listRole) {
@@ -82,6 +96,7 @@ class MasterRoleController extends GetxController {
   /// Mengembalikan pesan error, atau null bila berhasil.
   Future<String?> saveRole({
     String? originalId,
+    String? customId,
     required String namaRole,
     List<String> permissions = const [],
   }) async {
@@ -90,7 +105,7 @@ class MasterRoleController extends GetxController {
     if (nama.length > 50) return 'Nama role maksimal 50 karakter.';
 
     final isCreate = originalId == null;
-    final id = isCreate ? generateRoleId() : originalId.trim();
+    final id = isCreate ? (customId ?? await fetchNextId()) : originalId.trim();
     if (id.isEmpty) return 'ID role tidak valid.';
 
     final selectedPermissions = _cleanPermissions(permissions);
@@ -197,11 +212,30 @@ class MasterRoleController extends GetxController {
     _sort();
   }
 
+  // [MODIFIKASI] Pengurutan tabel master role berdasarkan id_role secara natural
   void _sort() {
     listRole.sort((first, second) {
-      final firstName = first['nama_role']?.toString().toLowerCase() ?? '';
-      final secondName = second['nama_role']?.toString().toLowerCase() ?? '';
-      return firstName.compareTo(secondName);
+      final firstId = (first['id_role'] ?? first['idRole'] ?? '').toString().trim();
+      final secondId = (second['id_role'] ?? second['idRole'] ?? '').toString().trim();
+      if (firstId.isEmpty && secondId.isEmpty) return 0;
+      if (firstId.isEmpty) return 1;
+      if (secondId.isEmpty) return -1;
+
+      final numA = int.tryParse(firstId);
+      final numB = int.tryParse(secondId);
+      if (numA != null && numB != null) return numA.compareTo(numB);
+
+      final reg = RegExp(r'^(\D*)(\d+)$');
+      final matchA = reg.firstMatch(firstId);
+      final matchB = reg.firstMatch(secondId);
+      if (matchA != null && matchB != null && matchA.group(1)?.toLowerCase() == matchB.group(1)?.toLowerCase()) {
+        final nA = int.tryParse(matchA.group(2)!) ?? 0;
+        final nB = int.tryParse(matchB.group(2)!) ?? 0;
+        final comp = nA.compareTo(nB);
+        if (comp != 0) return comp;
+      }
+
+      return firstId.toLowerCase().compareTo(secondId.toLowerCase());
     });
     listRole.refresh();
   }
@@ -284,7 +318,13 @@ class MasterRoleController extends GetxController {
     if (data is Map) {
       final message = data['message'] ?? data['error'];
       if (message != null && message.toString().trim().isNotEmpty) {
-        return message.toString();
+        final msgStr = message.toString();
+        if (msgStr.contains('notNull Violation')) {
+          final lower = msgStr.toLowerCase();
+          if (lower.contains('nama')) return 'Nama role tidak boleh kosong.';
+          return 'Data yang wajib diisi tidak boleh kosong.';
+        }
+        return msgStr;
       }
     }
     return switch (error.type) {

@@ -41,8 +41,22 @@ class MasterUnitController extends GetxController {
     }).toList();
   }
 
-  /// [MODIFIKASI] Buat ID unit baru yang melanjutkan nomor tertinggi (MAX + 1)
-  /// agar data unit yang sudah di-soft-delete tidak tertimpa dan tetap berfungsi sebagai riwayat (audit trail).
+  /// [MODIFIKASI] Ambil ID unit berikutnya langsung dari backend database (termasuk riwayat soft-delete)
+  Future<String> fetchNextId() async {
+    try {
+      final dio = await ApiService.getClient();
+      final response = await dio.get('/master/next-id/unit');
+      if (response.statusCode == 200 && response.data != null) {
+        final nextId = response.data['data']?['next_id']?.toString();
+        if (nextId != null && nextId.isNotEmpty) {
+          return nextId;
+        }
+      }
+    } catch (_) {}
+    return generateUnitId();
+  }
+
+  /// [MODIFIKASI] Buat ID unit baru 2 digit (UNIT-01) sebagai fallback
   String generateUnitId() {
     var maxNumber = 0;
     for (final unit in listUnit) {
@@ -55,7 +69,7 @@ class MasterUnitController extends GetxController {
         }
       }
     }
-    return 'UNIT-${(maxNumber + 1).toString().padLeft(3, '0')}';
+    return 'UNIT-${(maxNumber + 1).toString().padLeft(2, '0')}';
   }
 
   Future<void> fetchUnits() async {
@@ -81,6 +95,7 @@ class MasterUnitController extends GetxController {
   /// Mengembalikan pesan error, atau null bila berhasil.
   Future<String?> saveUnit({
     String? originalId,
+    String? customId,
     required String namaUnit,
   }) async {
     final nama = namaUnit.trim();
@@ -88,7 +103,7 @@ class MasterUnitController extends GetxController {
     if (nama.length > 100) return 'Nama unit maksimal 100 karakter.';
 
     final isCreate = originalId == null;
-    final id = isCreate ? generateUnitId() : originalId.trim();
+    final id = isCreate ? (customId ?? await fetchNextId()) : originalId.trim();
     if (id.isEmpty) return 'ID unit tidak valid.';
 
     final row = <String, dynamic>{'id_unit': id, 'nama_unit': nama};
@@ -154,11 +169,30 @@ class MasterUnitController extends GetxController {
     _sort();
   }
 
+  // [MODIFIKASI] Pengurutan tabel master unit berdasarkan id_unit secara natural
   void _sort() {
     listUnit.sort((first, second) {
-      final firstName = first['nama_unit']?.toString().toLowerCase() ?? '';
-      final secondName = second['nama_unit']?.toString().toLowerCase() ?? '';
-      return firstName.compareTo(secondName);
+      final firstId = (first['id_unit'] ?? first['idUnit'] ?? '').toString().trim();
+      final secondId = (second['id_unit'] ?? second['idUnit'] ?? '').toString().trim();
+      if (firstId.isEmpty && secondId.isEmpty) return 0;
+      if (firstId.isEmpty) return 1;
+      if (secondId.isEmpty) return -1;
+
+      final numA = int.tryParse(firstId);
+      final numB = int.tryParse(secondId);
+      if (numA != null && numB != null) return numA.compareTo(numB);
+
+      final reg = RegExp(r'^(\D*)(\d+)$');
+      final matchA = reg.firstMatch(firstId);
+      final matchB = reg.firstMatch(secondId);
+      if (matchA != null && matchB != null && matchA.group(1)?.toLowerCase() == matchB.group(1)?.toLowerCase()) {
+        final nA = int.tryParse(matchA.group(2)!) ?? 0;
+        final nB = int.tryParse(matchB.group(2)!) ?? 0;
+        final comp = nA.compareTo(nB);
+        if (comp != 0) return comp;
+      }
+
+      return firstId.toLowerCase().compareTo(secondId.toLowerCase());
     });
     listUnit.refresh();
   }
@@ -194,7 +228,13 @@ class MasterUnitController extends GetxController {
     if (data is Map) {
       final message = data['message'] ?? data['error'];
       if (message != null && message.toString().trim().isNotEmpty) {
-        return message.toString();
+        final msgStr = message.toString();
+        if (msgStr.contains('notNull Violation')) {
+          final lower = msgStr.toLowerCase();
+          if (lower.contains('nama')) return 'Nama unit tidak boleh kosong.';
+          return 'Data yang wajib diisi tidak boleh kosong.';
+        }
+        return msgStr;
       }
     }
     return switch (error.type) {

@@ -177,8 +177,7 @@ class _MasterTemplateContentState extends State<_MasterTemplateContent> {
           const SizedBox(width: 10),
           const Expanded(
             child: Text(
-              'Server belum terhubung. Data contoh ditampilkan agar halaman '
-              'tetap bisa dipakai.',
+              'Server belum terhubung. Data yang ditampilkan adalah data contoh',
               style: TextStyle(fontSize: 12, color: AppColors.textStrong),
             ),
           ),
@@ -459,12 +458,14 @@ class _MasterTemplateContentState extends State<_MasterTemplateContent> {
   }
 
   Future<void> _openForm([Map<String, dynamic>? template]) async {
+    final nextId = template == null ? await controller.fetchNextId() : null;
+    if (!mounted) return;
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       barrierDismissible: false,
       builder: (context) => _TemplateFormDialog(
         template: template,
-        generatedId: template == null ? controller.generateTemplateId() : null,
+        generatedId: nextId,
       ),
     );
     if (result == null) return;
@@ -473,6 +474,7 @@ class _MasterTemplateContentState extends State<_MasterTemplateContent> {
         (result['list_tindakan'] as List?)?.cast<String>() ?? const <String>[];
     final error = await controller.saveTemplate(
       originalId: template?['id_template']?.toString(),
+      customId: nextId,
       namaTemplate: result['nama_template']?.toString() ?? '',
       listTindakan: actions,
     );

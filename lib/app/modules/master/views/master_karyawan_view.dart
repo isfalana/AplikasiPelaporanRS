@@ -177,8 +177,7 @@ class _MasterKaryawanContentState extends State<_MasterKaryawanContent> {
           const SizedBox(width: 10),
           const Expanded(
             child: Text(
-              'Server belum terhubung. Data contoh ditampilkan agar halaman '
-              'tetap bisa dipakai.',
+              'Server belum terhubung. Data yang ditampilkan adalah data contoh',
               style: TextStyle(fontSize: 12, color: AppColors.textStrong),
             ),
           ),
@@ -725,6 +724,26 @@ class _KaryawanFormDialogState extends State<_KaryawanFormDialog> {
 
   void _submit() {
     if (_formKey.currentState?.validate() != true) return;
+    if (_selectedUnit.trim().isEmpty) {
+      Get.snackbar(
+        'Perhatian',
+        'Unit tidak boleh kosong',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: AppColors.warning,
+        colorText: AppColors.white,
+      );
+      return;
+    }
+    if (_selectedRole.trim().isEmpty) {
+      Get.snackbar(
+        'Perhatian',
+        'Role tidak boleh kosong',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: AppColors.warning,
+        colorText: AppColors.white,
+      );
+      return;
+    }
     Navigator.of(context).pop({
       'id_nik': _nikController.text.trim(),
       'nama_karyawan': _nameController.text.trim(),
@@ -921,7 +940,7 @@ class _KaryawanFormDialogState extends State<_KaryawanFormDialog> {
     // [MODIFIKASI] Periksa apakah unit yang terpilih ada di daftar unit aktif (widget.units).
     // Jika tidak ada (misalnya karyawan lama dengan unit historis yang sudah di-soft delete),
     // tampilkan opsi tersebut dengan penanda (Non-aktif / Riwayat) khusus pada form ubah karyawan ini.
-    // Pada modal Tambah Karyawan (_selectedUnit kosong), HANYA unit aktif (IT-Dev) yang muncul.
+    // Pada modal Tambah Karyawan (_selectedUnit kosong), HANYA unit aktif yang muncul.
     final hasCurrentUnit = _selectedUnit.isNotEmpty &&
         widget.units.any((unit) => unit['id_unit']?.toString() == _selectedUnit);
     final isInactiveUnit = _selectedUnit.isNotEmpty && !hasCurrentUnit;
@@ -932,14 +951,19 @@ class _KaryawanFormDialogState extends State<_KaryawanFormDialog> {
         _fieldLabel('Unit'),
         DropdownButtonFormField<String>(
           key: const ValueKey('karyawan_unit_dropdown'),
-          initialValue: _selectedUnit,
+          initialValue: _selectedUnit.isEmpty ? null : _selectedUnit,
           isExpanded: true,
           decoration: _inputDecoration('Pilih unit'),
+          validator: (value) => (value == null || value.trim().isEmpty)
+              ? 'Unit tidak boleh kosong'
+              : null,
           items: [
-            const DropdownMenuItem(
-              value: '',
-              child: Text('Belum ditentukan', overflow: TextOverflow.ellipsis),
-            ),
+            for (final unit in widget.units)
+              if ((unit['id_unit']?.toString() ?? '').isNotEmpty)
+                DropdownMenuItem(
+                  value: unit['id_unit']?.toString() ?? '',
+                  child: Text(_unitName(unit), overflow: TextOverflow.ellipsis),
+                ),
             if (isInactiveUnit)
               DropdownMenuItem(
                 value: _selectedUnit,
@@ -948,12 +972,6 @@ class _KaryawanFormDialogState extends State<_KaryawanFormDialog> {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-            for (final unit in widget.units)
-              if ((unit['id_unit']?.toString() ?? '').isNotEmpty)
-                DropdownMenuItem(
-                  value: unit['id_unit']?.toString() ?? '',
-                  child: Text(_unitName(unit), overflow: TextOverflow.ellipsis),
-                ),
           ],
           onChanged: (value) => setState(() => _selectedUnit = value ?? ''),
         ),
@@ -975,14 +993,19 @@ class _KaryawanFormDialogState extends State<_KaryawanFormDialog> {
         _fieldLabel('Role'),
         DropdownButtonFormField<String>(
           key: const ValueKey('karyawan_role_dropdown'),
-          initialValue: _selectedRole,
+          initialValue: _selectedRole.isEmpty ? null : _selectedRole,
           isExpanded: true,
           decoration: _inputDecoration('Pilih role'),
+          validator: (value) => (value == null || value.trim().isEmpty)
+              ? 'Role tidak boleh kosong'
+              : null,
           items: [
-            const DropdownMenuItem(
-              value: '',
-              child: Text('Belum ditentukan', overflow: TextOverflow.ellipsis),
-            ),
+            for (final role in widget.roles)
+              if ((role['id_role']?.toString() ?? '').isNotEmpty)
+                DropdownMenuItem(
+                  value: role['id_role']?.toString() ?? '',
+                  child: Text(_roleName(role), overflow: TextOverflow.ellipsis),
+                ),
             if (isInactiveRole)
               DropdownMenuItem(
                 value: _selectedRole,
@@ -991,12 +1014,6 @@ class _KaryawanFormDialogState extends State<_KaryawanFormDialog> {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-            for (final role in widget.roles)
-              if ((role['id_role']?.toString() ?? '').isNotEmpty)
-                DropdownMenuItem(
-                  value: role['id_role']?.toString() ?? '',
-                  child: Text(_roleName(role), overflow: TextOverflow.ellipsis),
-                ),
           ],
           onChanged: (value) => setState(() => _selectedRole = value ?? ''),
         ),

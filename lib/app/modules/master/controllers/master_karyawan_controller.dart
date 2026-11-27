@@ -132,6 +132,8 @@ class MasterKaryawanController extends GetxController {
     if (nik.length > 50) return 'NIK karyawan maksimal 50 karakter.';
     if (nama.isEmpty) return 'Nama karyawan wajib diisi.';
     if (nama.length > 150) return 'Nama karyawan maksimal 150 karakter.';
+    if (unit.isEmpty) return 'Unit tidak boleh kosong.';
+    if (role.isEmpty) return 'Role tidak boleh kosong.';
 
     if (isCreate) {
       if (pass.isEmpty) return 'Password wajib diisi untuk karyawan baru.';
@@ -272,14 +274,15 @@ class MasterKaryawanController extends GetxController {
       }
     }
 
+    // [MODIFIKASI] Urutkan listUnit dan listRole berdasarkan ID
     listUnit.sort(
-      (first, second) => (first['nama_unit']?.toString() ?? '').compareTo(
-        second['nama_unit']?.toString() ?? '',
+      (first, second) => (first['id_unit']?.toString() ?? '').compareTo(
+        second['id_unit']?.toString() ?? '',
       ),
     );
     listRole.sort(
-      (first, second) => (first['nama_role']?.toString() ?? '').compareTo(
-        second['nama_role']?.toString() ?? '',
+      (first, second) => (first['id_role']?.toString() ?? '').compareTo(
+        second['id_role']?.toString() ?? '',
       ),
     );
     listUnit.refresh();
@@ -384,7 +387,17 @@ class MasterKaryawanController extends GetxController {
     if (data is Map) {
       final message = data['message'] ?? data['error'];
       if (message != null && message.toString().trim().isNotEmpty) {
-        return message.toString();
+        final msgStr = message.toString();
+        // [MODIFIKASI] Ubah pesan teknis notNull Violation menjadi pesan ramah pengguna
+        if (msgStr.contains('notNull Violation')) {
+          final lower = msgStr.toLowerCase();
+          if (lower.contains('unit')) return 'Unit tidak boleh kosong.';
+          if (lower.contains('role')) return 'Role tidak boleh kosong.';
+          if (lower.contains('nama')) return 'Nama karyawan tidak boleh kosong.';
+          if (lower.contains('nik')) return 'NIK karyawan tidak boleh kosong.';
+          return 'Data yang wajib diisi tidak boleh kosong.';
+        }
+        return msgStr;
       }
     }
     return switch (error.type) {
