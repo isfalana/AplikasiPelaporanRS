@@ -174,8 +174,7 @@ class _MasterRoleContentState extends State<_MasterRoleContent> {
           const SizedBox(width: 10),
           const Expanded(
             child: Text(
-              'Server belum terhubung. Data contoh ditampilkan agar halaman '
-              'tetap bisa dipakai.',
+              'Server belum terhubung. Data yang ditampilkan adalah data contoh',
               style: TextStyle(fontSize: 12, color: AppColors.textStrong),
             ),
           ),
@@ -444,18 +443,21 @@ class _MasterRoleContentState extends State<_MasterRoleContent> {
   }
 
   Future<void> _openForm([Map<String, dynamic>? role]) async {
+    final nextId = role == null ? await controller.fetchNextId() : null;
+    if (!mounted) return;
     final result = await showDialog<_RoleFormResult>(
       context: context,
       barrierDismissible: false,
       builder: (context) => _RoleFormDialog(
         role: role,
-        generatedId: role == null ? controller.generateRoleId() : null,
+        generatedId: nextId,
       ),
     );
     if (result == null) return;
 
     final error = await controller.saveRole(
       originalId: role?['id_role']?.toString(),
+      customId: nextId,
       namaRole: result.namaRole,
       permissions: result.permissions,
     );

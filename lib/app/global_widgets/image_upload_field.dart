@@ -369,8 +369,9 @@ class ImageUploadField extends StatelessWidget {
           chosenName = compressed.fileName;
           chosenBytes = compressed.bytes;
           Get.snackbar(
-            'Kompresi Otomatis Berhasil',
-            'Ukuran file berhasil dioptimalkan dari ${compressed.formattedOriginalSize} menjadi ${compressed.formattedCompressedSize} (hemat ${compressed.savingsPercentage}%).',
+            'File Berhasil diunggah',
+            'Silahkan dapat dicek kembali',
+            // 'Ukuran file berhasil dioptimalkan dari ${compressed.formattedOriginalSize} menjadi ${compressed.formattedCompressedSize} (hemat ${compressed.savingsPercentage}%).',
             snackPosition: SnackPosition.BOTTOM,
             backgroundColor: const Color(0xFF10B981),
             colorText: Colors.white,
@@ -473,8 +474,10 @@ class ImageUploadField extends StatelessWidget {
         name = compressed.fileName;
         data = compressed.bytes;
         Get.snackbar(
-          'Kompresi Otomatis Berhasil',
-          'Ukuran foto berhasil dioptimalkan dari ${compressed.formattedOriginalSize} menjadi ${compressed.formattedCompressedSize} (hemat ${compressed.savingsPercentage}%).',
+          'File Berhasil diunggah',
+          'Silahkan dapat dicek kembali',
+          // 'Kompresi Otomatis Berhasil',
+          // 'Ukuran foto berhasil dioptimalkan dari ${compressed.formattedOriginalSize} menjadi ${compressed.formattedCompressedSize} (hemat ${compressed.savingsPercentage}%).',
           snackPosition: SnackPosition.BOTTOM,
           backgroundColor: const Color(0xFF10B981),
           colorText: Colors.white,

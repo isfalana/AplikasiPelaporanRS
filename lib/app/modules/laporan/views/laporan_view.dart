@@ -55,6 +55,10 @@ class _LaporanContentState extends State<_LaporanContent> {
   Map<String, dynamic>? _editingReport;
   Map<String, dynamic>? _viewingReport;
 
+  // [MODIFIKASI] Filter dan state tampilan riwayat laporan (default 5 riwayat terbaru)
+  String _historyFilter = '5';
+  String? _lastViewingReportIdForHistory;
+
   // Filter aktif pada card "Daftar Laporan". Bisa lebih dari satu.
   final Set<String> _reportFilters = {};
 
@@ -75,6 +79,8 @@ class _LaporanContentState extends State<_LaporanContent> {
           _viewingReport = null;
           _editingReport = null;
           _reportFilters.clear();
+          _historyFilter = '5';
+          _lastViewingReportIdForHistory = null;
           _resetForm(notify: false);
         });
       }
@@ -1697,35 +1703,36 @@ class _LaporanContentState extends State<_LaporanContent> {
                   ),
                 ],
                 _validationSection(report),
-                // [MODIFIKASI] Menampilkan timeline Riwayat Laporan (History) dengan nama PIC karyawan berdasarkan NIK
-                _buildHistorySection(report),
-                const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    TextButton.icon(
-                      onPressed: () => setState(() => _viewingReport = null),
-                      icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 14),
-                      label: const Text('Kembali ke daftar'),
-                    ),
-                    if (_isPic(report) && _displayStatus(report['status']?.toString()) != 'Done')
-                      FilledButton.icon(
-                        onPressed: () => _navigateToTindakan(report),
-                        icon: const Icon(Icons.playlist_add_check_rounded, size: 18),
-                        label: const Text('Berikan Tindakan'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
               ],
             ),
+          ),
+          const SizedBox(height: 16),
+          // [MODIFIKASI] Section Riwayat Laporan dipisahkan dalam container/card tersendiri di bagian bawah
+          _buildHistorySection(report),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              TextButton.icon(
+                onPressed: () => setState(() => _viewingReport = null),
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 14),
+                label: const Text('Kembali ke daftar'),
+              ),
+              if (_isPic(report) && _displayStatus(report['status']?.toString()) != 'Done')
+                FilledButton.icon(
+                  onPressed: () => _navigateToTindakan(report),
+                  icon: const Icon(Icons.playlist_add_check_rounded, size: 18),
+                  label: const Text('Berikan Tindakan'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+            ],
           ),
         ],
       ),
@@ -1987,14 +1994,62 @@ class _LaporanContentState extends State<_LaporanContent> {
     return noteWidget;
   }
 
-  // [MODIFIKASI] Bagian Riwayat Laporan (History): Diurutkan secara kronologis berdasarkan tanggal dan waktu update terbaru
+  DateTime _parseWibDateTime(dynamic raw) {
+    if (raw == null) return DateTime.now();
+    final dt = DateTime.tryParse(raw.toString());
+    if (dt == null) return DateTime.now();
+    return dt.toUtc().add(const Duration(hours: 7));
+  }
+
+  String _formatDateHeader(DateTime wib) {
+    const months = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+    final day = wib.day.toString().padLeft(2, '0');
+    final monthName = months[wib.month - 1];
+    final year = wib.year;
+
+    final now = DateTime.now().toUtc().add(const Duration(hours: 7));
+    final today = DateTime(now.year, now.month, now.day);
+    final target = DateTime(wib.year, wib.month, wib.day);
+    final diffDays = today.difference(target).inDays;
+
+    if (diffDays == 0) {
+      return 'Hari Ini - $day $monthName $year';
+    } else if (diffDays == 1) {
+      return 'Kemarin - $day $monthName $year';
+    } else {
+      return '$day $monthName $year';
+    }
+  }
+
+  String _formatShortDate(DateTime wib) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+      'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des'
+    ];
+    final day = wib.day.toString().padLeft(2, '0');
+    final monthName = months[wib.month - 1];
+    return '$day $monthName ${wib.year}';
+  }
+
+  // [MODIFIKASI] Bagian Riwayat Laporan (History):
+  // 1. Separate berdasarkan tanggal (WIB) dengan badge tanggal & garis pemisah
+  // 2. Dropdown & tombol expand: default menampilkan 5 riwayat terbaru, dengan opsi "Lihat semua riwayat"
   Widget _buildHistorySection(Map<String, dynamic> report) {
+    final reportId = report['id_laporan']?.toString() ?? '';
+    if (_lastViewingReportIdForHistory != reportId) {
+      _lastViewingReportIdForHistory = reportId;
+      _historyFilter = '5';
+    }
+
     final rawHistory = report['history'];
     final historyList = (rawHistory is List)
         ? List<Map<String, dynamic>>.from(rawHistory.whereType<Map>())
         : <Map<String, dynamic>>[];
 
-    // [MODIFIKASI] Urutkan riwayat laporan berdasarkan waktu update sistem, user, maupun admin (DESC)
+    // Urutkan riwayat laporan berdasarkan waktu update terbaru (DESC)
     historyList.sort((a, b) {
       final dtA = DateTime.tryParse(a['created_at']?.toString() ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0);
@@ -2003,170 +2058,414 @@ class _LaporanContentState extends State<_LaporanContent> {
       return dtB.compareTo(dtA);
     });
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Divider(height: 32),
-        const Row(
-          children: [
-            Icon(Icons.history_rounded, size: 20, color: AppColors.primary),
-            SizedBox(width: 8),
-            Text(
-              'Riwayat Laporan',
-              style: TextStyle(
-                color: AppColors.textStrong,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        if (historyList.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8),
-            child: Text(
-              'Belum ada aktivitas riwayat yang dicatat.',
-              style: TextStyle(color: AppColors.textWeak, fontSize: 13),
-            ),
-          )
-        else
-          Column(
-            children: historyList.map<Widget>((h) {
-              final dateStr = h['created_at']?.toString() ?? '';
-              final dt = DateTime.tryParse(dateStr);
-              // [MODIFIKASI] Jam riwayat laporan disesuaikan ke jam lokal Jakarta (WIB / UTC+7) dan format DD-MM-YYYY
-              String timeFormatted = dateStr;
-              if (dt != null) {
-                final wib = dt.toUtc().add(const Duration(hours: 7));
-                final day = wib.day.toString().padLeft(2, '0');
-                final month = wib.month.toString().padLeft(2, '0');
-                final year = wib.year;
-                final hour = wib.hour.toString().padLeft(2, '0');
-                final minute = wib.minute.toString().padLeft(2, '0');
-                final second = wib.second.toString().padLeft(2, '0');
-                timeFormatted = '$day-$month-$year $hour:$minute:$second WIB';
-              }
+    // Kumpulkan tanggal-tanggal unik untuk filter dropdown
+    final Map<String, List<Map<String, dynamic>>> allDatesMap = {};
+    for (final h in historyList) {
+      final wib = _parseWibDateTime(h['created_at']);
+      final dateKey = '${wib.year}-${wib.month.toString().padLeft(2, '0')}-${wib.day.toString().padLeft(2, '0')}';
+      allDatesMap.putIfAbsent(dateKey, () => []).add(h);
+    }
 
-              // [MODIFIKASI] Tampilkan nama actor dan nama unit kerja (Nama · Unit), bukan ID
-              final actorObj = h['actor'];
-              String actorName = '-';
-              String actorUnit = '';
-              if (actorObj is Map) {
-                actorName = actorObj['nama_karyawan']?.toString().trim() ?? actorObj['id_nik']?.toString().trim() ?? '-';
-                actorUnit = actorObj['nama_unit']?.toString().trim() ?? '';
-                if (actorUnit.isEmpty && actorObj['unit'] is Map) {
-                  actorUnit = actorObj['unit']['nama_unit']?.toString().trim() ?? '';
-                }
-                if (actorUnit.isEmpty && actorObj['id_unit'] != null) {
-                  actorUnit = controller.unitName(actorObj['id_unit'].toString());
-                }
-              } else if (h['actor_id'] != null) {
-                final aNik = h['actor_id'].toString().trim();
-                actorName = controller.userName(aNik);
-                actorUnit = controller.employeeUnitName(aNik);
-              } else {
-                actorName = 'Sistem';
-              }
-              final actor = (actorUnit.isNotEmpty && actorUnit != '-') ? '$actorName · $actorUnit' : actorName;
+    // Tentukan daftar riwayat yang akan ditampilkan sesuai filter aktif
+    final List<Map<String, dynamic>> displayedList;
+    if (_historyFilter == 'all') {
+      displayedList = historyList;
+    } else if (_historyFilter.startsWith('date_')) {
+      final targetDate = _historyFilter.substring(5);
+      displayedList = historyList.where((h) {
+        final wib = _parseWibDateTime(h['created_at']);
+        final k = '${wib.year}-${wib.month.toString().padLeft(2, '0')}-${wib.day.toString().padLeft(2, '0')}';
+        return k == targetDate;
+      }).toList();
+    } else {
+      // Default: '5' (5 riwayat terbaru)
+      displayedList = historyList.take(5).toList();
+    }
 
-              var desc = h['description']?.toString() ?? '-';
+    // Kelompokkan displayedList berdasarkan tanggal (WIB)
+    final Map<String, List<Map<String, dynamic>>> groupedDisplayed = {};
+    for (final h in displayedList) {
+      final wib = _parseWibDateTime(h['created_at']);
+      final dateKey = '${wib.year}-${wib.month.toString().padLeft(2, '0')}-${wib.day.toString().padLeft(2, '0')}';
+      groupedDisplayed.putIfAbsent(dateKey, () => []).add(h);
+    }
 
-              // [MODIFIKASI] Format PIC beserta nama unit kerja jika ada di new_value atau description
-              final newVal = h['new_value'];
-              if (newVal is Map) {
-                List<String> picLabels = [];
-                if (newVal['pics'] is List && (newVal['pics'] as List).isNotEmpty) {
-                  picLabels = (newVal['pics'] as List).map<String>((p) {
-                    if (p is Map) {
-                      final pName = p['nama_karyawan']?.toString().trim() ?? p['id_nik']?.toString().trim() ?? '';
-                      final pUnit = p['nama_unit']?.toString().trim() ?? '';
-                      return (pUnit.isNotEmpty && pUnit != '-') ? '$pName ($pUnit)' : pName;
-                    }
-                    return p.toString();
-                  }).where((s) => s.isNotEmpty).toList();
-                } else if (newVal['nama_pics'] is List && (newVal['nama_pics'] as List).isNotEmpty) {
-                  picLabels = (newVal['nama_pics'] as List).map((n) => n.toString()).toList();
-                } else if (newVal['id_nik_pics'] is List && (newVal['id_nik_pics'] as List).isNotEmpty) {
-                  picLabels = (newVal['id_nik_pics'] as List).map((nik) {
-                    final pName = controller.userName(nik.toString());
-                    final pUnit = controller.employeeUnitName(nik.toString());
-                    return (pUnit.isNotEmpty && pUnit != '-') ? '$pName ($pUnit)' : pName;
-                  }).toList();
-                }
+    // Bangun daftar opsi untuk dropdown
+    final List<DropdownMenuItem<String>> dropdownItems = [
+      const DropdownMenuItem(
+        value: '5',
+        child: Text('5 Riwayat Terbaru'),
+      ),
+      DropdownMenuItem(
+        value: 'all',
+        child: Text('Semua Riwayat (${historyList.length})'),
+      ),
+    ];
+    if (allDatesMap.length > 1) {
+      for (final entry in allDatesMap.entries) {
+        final sampleDt = _parseWibDateTime(entry.value.first['created_at']);
+        dropdownItems.add(
+          DropdownMenuItem(
+            value: 'date_${entry.key}',
+            child: Text('Tanggal: ${_formatShortDate(sampleDt)} (${entry.value.length})'),
+          ),
+        );
+      }
+    }
 
-                if (picLabels.isNotEmpty) {
-                  final pJoined = picLabels.join(', ');
-                  if (desc.contains('Laporan baru dibuat') && !desc.contains('PIC:')) {
-                    desc = '$desc. PIC: $pJoined';
-                  } else if (desc.contains('Penugasan PIC diperbarui') && !desc.contains(':')) {
-                    desc = '$desc: $pJoined';
-                  }
-                }
-              }
+    final currentDropdownValue = dropdownItems.any((item) => item.value == _historyFilter)
+        ? _historyFilter
+        : '5';
 
-              return Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.all(12),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: _cardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: AppColors.surface,
+                  color: const Color(0xFFFAF5FF),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.border),
                 ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      margin: const EdgeInsets.only(top: 4),
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
+                child: const Icon(Icons.history_rounded, size: 20, color: AppColors.primary),
+              ),
+              const SizedBox(width: 10),
+              const Text(
+                'Riwayat Laporan',
+                style: TextStyle(
+                  color: AppColors.textStrong,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFAF5FF),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE9D5FF)),
+                ),
+                child: Text(
+                  '${historyList.length}',
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              if (historyList.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFE9D5FF)),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: currentDropdownValue,
+                      isDense: true,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
                         color: AppColors.primary,
-                        shape: BoxShape.circle,
                       ),
+                      icon: const Icon(Icons.arrow_drop_down, color: AppColors.primary, size: 20),
+                      items: dropdownItems,
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() => _historyFilter = val);
+                        }
+                      },
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          const Divider(height: 1, color: AppColors.border),
+          const SizedBox(height: 10),
+          if (historyList.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                'Belum ada aktivitas riwayat yang dicatat.',
+                style: TextStyle(color: AppColors.textWeak, fontSize: 13),
+              ),
+            )
+          else ...[
+            for (final entry in groupedDisplayed.entries) ...[
+              Builder(
+                builder: (context) {
+                  final firstWib = _parseWibDateTime(entry.value.first['created_at']);
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 10, bottom: 8),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFAF5FF),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFFE9D5FF)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
+                              const Icon(
+                                Icons.calendar_today_rounded,
+                                size: 12,
+                                color: AppColors.primary,
+                              ),
+                              const SizedBox(width: 6),
                               Text(
-                                actor,
+                                _formatDateHeader(firstWib),
                                 style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                  color: AppColors.textStrong,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.primary,
                                 ),
                               ),
-                              Text(
-                                timeFormatted,
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: AppColors.textWeak,
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  '${entry.value.length}',
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            desc,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textStrong,
-                            ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Divider(
+                            color: Color(0xFFE9D5FF),
+                            thickness: 1,
                           ),
-                        ],
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+              for (final h in entry.value)
+                _buildHistoryItemRow(h),
+            ],
+            if (historyList.length > 5) ...[
+              const SizedBox(height: 8),
+              InkWell(
+                onTap: () {
+                  setState(() {
+                    if (_historyFilter == '5') {
+                      _historyFilter = 'all';
+                    } else {
+                      _historyFilter = '5';
+                    }
+                  });
+                },
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: (_historyFilter == 'all') ? AppColors.surface : const Color(0xFFFAF5FF),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: (_historyFilter == 'all') ? AppColors.border : const Color(0xFFE9D5FF),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        (_historyFilter == 'all')
+                            ? Icons.keyboard_arrow_up_rounded
+                            : Icons.keyboard_arrow_down_rounded,
+                        color: AppColors.primary,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        (_historyFilter == 'all')
+                            ? 'Tampilkan 5 riwayat terbaru'
+                            : 'Lihat semua riwayat (${historyList.length})',
+                        style: const TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHistoryItemRow(Map<String, dynamic> h) {
+    final dateStr = h['created_at']?.toString() ?? '';
+    final dt = DateTime.tryParse(dateStr);
+    String timeFormatted = dateStr;
+    String timeOnly = dateStr;
+    if (dt != null) {
+      final wib = dt.toUtc().add(const Duration(hours: 7));
+      final day = wib.day.toString().padLeft(2, '0');
+      final month = wib.month.toString().padLeft(2, '0');
+      final year = wib.year;
+      final hour = wib.hour.toString().padLeft(2, '0');
+      final minute = wib.minute.toString().padLeft(2, '0');
+      final second = wib.second.toString().padLeft(2, '0');
+      timeFormatted = '$day-$month-$year $hour:$minute:$second WIB';
+      timeOnly = '$hour:$minute:$second WIB';
+    }
+
+    // Tampilkan nama actor dan nama unit kerja (Nama · Unit), bukan ID
+    final actorObj = h['actor'];
+    String actorName = '-';
+    String actorUnit = '';
+    if (actorObj is Map) {
+      actorName = actorObj['nama_karyawan']?.toString().trim() ??
+          actorObj['id_nik']?.toString().trim() ??
+          '-';
+      actorUnit = actorObj['nama_unit']?.toString().trim() ?? '';
+      if (actorUnit.isEmpty && actorObj['unit'] is Map) {
+        actorUnit = actorObj['unit']['nama_unit']?.toString().trim() ?? '';
+      }
+      if (actorUnit.isEmpty && actorObj['id_unit'] != null) {
+        actorUnit = controller.unitName(actorObj['id_unit'].toString());
+      }
+    } else if (h['actor_id'] != null) {
+      final aNik = h['actor_id'].toString().trim();
+      actorName = controller.userName(aNik);
+      actorUnit = controller.employeeUnitName(aNik);
+    } else {
+      actorName = 'Sistem';
+    }
+    final actor = (actorUnit.isNotEmpty && actorUnit != '-') ? '$actorName · $actorUnit' : actorName;
+
+    var desc = h['description']?.toString() ?? '-';
+
+    // Format PIC beserta nama unit kerja jika ada di new_value atau description
+    final newVal = h['new_value'];
+    if (newVal is Map) {
+      List<String> picLabels = [];
+      if (newVal['pics'] is List && (newVal['pics'] as List).isNotEmpty) {
+        picLabels = (newVal['pics'] as List).map<String>((p) {
+          if (p is Map) {
+            final pName = p['nama_karyawan']?.toString().trim() ?? p['id_nik']?.toString().trim() ?? '';
+            final pUnit = p['nama_unit']?.toString().trim() ?? '';
+            return (pUnit.isNotEmpty && pUnit != '-') ? '$pName ($pUnit)' : pName;
+          }
+          return p.toString();
+        }).where((s) => s.isNotEmpty).toList();
+      } else if (newVal['nama_pics'] is List && (newVal['nama_pics'] as List).isNotEmpty) {
+        picLabels = (newVal['nama_pics'] as List).map((n) => n.toString()).toList();
+      } else if (newVal['id_nik_pics'] is List && (newVal['id_nik_pics'] as List).isNotEmpty) {
+        picLabels = (newVal['id_nik_pics'] as List).map((nik) {
+          final pName = controller.userName(nik.toString());
+          final pUnit = controller.employeeUnitName(nik.toString());
+          return (pUnit.isNotEmpty && pUnit != '-') ? '$pName ($pUnit)' : pName;
+        }).toList();
+      }
+
+      if (picLabels.isNotEmpty) {
+        final pJoined = picLabels.join(', ');
+        if (desc.contains('Laporan baru dibuat') && !desc.contains('PIC:')) {
+          desc = '$desc. PIC: $pJoined';
+        } else if (desc.contains('Penugasan PIC diperbarui') && !desc.contains(':')) {
+          desc = '$desc: $pJoined';
+        }
+      }
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 5),
+            width: 8,
+            height: 8,
+            decoration: const BoxDecoration(
+              color: AppColors.primary,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        actor,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          color: AppColors.textStrong,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Tooltip(
+                      message: timeFormatted,
+                      child: Text(
+                        timeOnly,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textWeak,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ],
                 ),
-              );
-            }).toList(),
+                const SizedBox(height: 4),
+                Text(
+                  desc,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textStrong,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
           ),
-      ],
+        ],
+      ),
     );
   }
 

@@ -41,8 +41,22 @@ class MasterTemplateTindakanController extends GetxController {
     }).toList();
   }
 
-  /// [MODIFIKASI] Buat ID template baru yang melanjutkan nomor tertinggi (MAX + 1)
-  /// agar data template yang sudah di-soft-delete tidak tertimpa dan tetap berfungsi sebagai riwayat (audit trail).
+  /// [MODIFIKASI] Ambil ID template berikutnya langsung dari database (termasuk soft-delete)
+  Future<String> fetchNextId() async {
+    try {
+      final dio = await ApiService.getClient();
+      final response = await dio.get('/master/next-id/template');
+      if (response.statusCode == 200 && response.data != null) {
+        final nextId = response.data['data']?['next_id']?.toString();
+        if (nextId != null && nextId.isNotEmpty) {
+          return nextId;
+        }
+      }
+    } catch (_) {}
+    return generateTemplateId();
+  }
+
+  /// [MODIFIKASI] Buat ID template baru 2 digit (TPL-01) sebagai fallback
   String generateTemplateId() {
     var maxNumber = 0;
     for (final template in listTemplate) {
@@ -81,6 +95,7 @@ class MasterTemplateTindakanController extends GetxController {
   /// Mengembalikan pesan error, atau null bila berhasil.
   Future<String?> saveTemplate({
     String? originalId,
+    String? customId,
     required String namaTemplate,
     required List<String> listTindakan,
   }) async {
@@ -96,7 +111,7 @@ class MasterTemplateTindakanController extends GetxController {
     }
 
     final isCreate = originalId == null;
-    final id = isCreate ? generateTemplateId() : originalId.trim();
+    final id = isCreate ? (customId ?? await fetchNextId()) : originalId.trim();
     if (id.isEmpty) return 'ID template tidak valid.';
 
     final now = DateTime.now().toIso8601String();
@@ -187,11 +202,30 @@ class MasterTemplateTindakanController extends GetxController {
     }
   }
 
+  // [MODIFIKASI] Pengurutan tabel master template tindakan berdasarkan id_template secara natural
   void _sort() {
     listTemplate.sort((first, second) {
-      final firstId = first['id_template']?.toString().toLowerCase() ?? '';
-      final secondId = second['id_template']?.toString().toLowerCase() ?? '';
-      return firstId.compareTo(secondId);
+      final firstId = (first['id_template'] ?? first['idTemplate'] ?? '').toString().trim();
+      final secondId = (second['id_template'] ?? second['idTemplate'] ?? '').toString().trim();
+      if (firstId.isEmpty && secondId.isEmpty) return 0;
+      if (firstId.isEmpty) return 1;
+      if (secondId.isEmpty) return -1;
+
+      final numA = int.tryParse(firstId);
+      final numB = int.tryParse(secondId);
+      if (numA != null && numB != null) return numA.compareTo(numB);
+
+      final reg = RegExp(r'^(\D*)(\d+)$');
+      final matchA = reg.firstMatch(firstId);
+      final matchB = reg.firstMatch(secondId);
+      if (matchA != null && matchB != null && matchA.group(1)?.toLowerCase() == matchB.group(1)?.toLowerCase()) {
+        final nA = int.tryParse(matchA.group(2)!) ?? 0;
+        final nB = int.tryParse(matchB.group(2)!) ?? 0;
+        final comp = nA.compareTo(nB);
+        if (comp != 0) return comp;
+      }
+
+      return firstId.toLowerCase().compareTo(secondId.toLowerCase());
     });
     listTemplate.refresh();
   }
@@ -267,7 +301,13 @@ class MasterTemplateTindakanController extends GetxController {
     if (data is Map) {
       final message = data['message'] ?? data['error'];
       if (message != null && message.toString().trim().isNotEmpty) {
-        return message.toString();
+        final msgStr = message.toString();
+        if (msgStr.contains('notNull Violation')) {
+          final lower = msgStr.toLowerCase();
+          if (lower.contains('nama') || lower.contains('template')) return 'Nama template tidak boleh kosong.';
+          return 'Data yang wajib diisi tidak boleh kosong.';
+        }
+        return msgStr;
       }
     }
     return switch (error.type) {

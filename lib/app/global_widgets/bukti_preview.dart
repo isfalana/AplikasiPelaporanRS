@@ -433,7 +433,7 @@ class _BuktiViewerDialogState extends State<_BuktiViewerDialog> {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _errorMessage = 'Data file tidak ditemukan di server';
+          _errorMessage = 'Data file tidak ditemukan';
         });
       }
     } catch (e) {
@@ -488,7 +488,7 @@ class _BuktiViewerDialogState extends State<_BuktiViewerDialog> {
       if (data == null || data.isEmpty) {
         Get.snackbar(
           'Gagal Mengunduh',
-          'Isi berkas tidak ditemukan di penyimpanan server.',
+          'Isi berkas tidak ditemukan.',
           backgroundColor: AppColors.warning,
           colorText: AppColors.white,
           snackPosition: SnackPosition.BOTTOM,
@@ -682,7 +682,7 @@ class _BuktiViewerDialogState extends State<_BuktiViewerDialog> {
     if (_ext == 'xlsx' || _ext == 'xls' || _ext == 'csv') {
       return 'Pratinjau lembar kerja Excel.';
     }
-    return 'Dokumen tersimpan pada server. Klik tombol Unduh untuk membukanya.';
+    return 'Dokumen tersimpan. Klik tombol Unduh untuk membukanya.';
   }
 
   Widget _buildContent() {
@@ -1010,7 +1010,7 @@ class _BuktiViewerDialogState extends State<_BuktiViewerDialog> {
                 border: Border.all(color: AppColors.divider),
               ),
               child: const Text(
-                'File tersimpan pada server. Klik Unduh Dokumen untuk membukanya di Microsoft Excel atau Google Spreadsheet.',
+                'File tersimpan. Klik Unduh Dokumen untuk membukanya di Microsoft Excel atau Google Spreadsheet.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 11.5, color: AppColors.textWeak),
               ),
@@ -1069,7 +1069,7 @@ class _BuktiViewerDialogState extends State<_BuktiViewerDialog> {
                 border: Border.all(color: AppColors.divider),
               ),
               child: const Text(
-                'File tersimpan pada server. Klik tombol di bawah untuk mengunduh dan membukanya di Microsoft Word.',
+                'File tersimpan. Klik tombol di bawah untuk mengunduh dan membukanya di Microsoft Word.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 11.5, color: AppColors.textWeak),
               ),

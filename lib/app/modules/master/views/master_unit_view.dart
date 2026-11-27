@@ -389,18 +389,21 @@ class _MasterUnitContentState extends State<_MasterUnitContent> {
   }
 
   Future<void> _openForm([Map<String, dynamic>? unit]) async {
+    final nextId = unit == null ? await controller.fetchNextId() : null;
+    if (!mounted) return;
     final result = await showDialog<Map<String, String>>(
       context: context,
       barrierDismissible: false,
       builder: (context) => _UnitFormDialog(
         unit: unit,
-        generatedId: unit == null ? controller.generateUnitId() : null,
+        generatedId: nextId,
       ),
     );
     if (result == null) return;
 
     final error = await controller.saveUnit(
       originalId: unit?['id_unit']?.toString(),
+      customId: nextId,
       namaUnit: result['nama_unit'] ?? '',
     );
     if (!mounted) return;

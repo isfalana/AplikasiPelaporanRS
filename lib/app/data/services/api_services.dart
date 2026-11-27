@@ -9,10 +9,10 @@ class ApiService {
         defaultTargetPlatform == TargetPlatform.windows ||
         defaultTargetPlatform == TargetPlatform.linux ||
         defaultTargetPlatform == TargetPlatform.macOS) {
-      return 'https://updates-phil-noted-surprise.trycloudflare.com/api';
+      return 'https://collectors-basically-unified-itself.trycloudflare.com/api';
     } else {
       // IP khusus untuk Emulator Android agar bisa mengakses localhost komputer
-      return 'https://updates-phil-noted-surprise.trycloudflare.com/api';
+      return 'https://collectors-basically-unified-itself.trycloudflare.com/api';
     }
   }
 
