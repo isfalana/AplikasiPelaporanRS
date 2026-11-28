@@ -215,7 +215,7 @@ class ImageUploadField extends StatelessWidget {
           // [MODIFIKASI] Berikan keterangan yang tepat bila file sudah tersimpan di server atau baru dipilih lokal
           Text(
             (imageUrl != null && imageUrl!.trim().isNotEmpty && (bytes == null || bytes!.isEmpty))
-                ? 'File tersimpan di server · Siap dilihat & diunduh'
+                ? 'File tersimpan · Siap dilihat & diunduh'
                 : 'Pratinjau lokal · ${buktiFileSize(bytes)} (Maks. $maxFileSizeText) - klik Simpan untuk mengunggah.',
             style: const TextStyle(fontSize: 10.5, color: AppColors.textWeak),
           ),

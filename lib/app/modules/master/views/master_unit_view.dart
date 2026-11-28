@@ -170,8 +170,7 @@ class _MasterUnitContentState extends State<_MasterUnitContent> {
           const SizedBox(width: 10),
           const Expanded(
             child: Text(
-              'Server belum terhubung. Data contoh ditampilkan agar halaman '
-              'tetap bisa dipakai.',
+              'Server belum terhubung. Data yang ditampilkan adalah data contoh',
               style: TextStyle(fontSize: 12, color: AppColors.textStrong),
             ),
           ),
